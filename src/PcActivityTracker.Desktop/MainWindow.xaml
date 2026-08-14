@@ -1,0 +1,12 @@
+<Window
+    x:Class="PcActivityTracker.Desktop.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="PC Activity Tracker">
+    <Grid Padding="32">
+        <StackPanel Spacing="12" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="PC Activity Tracker" />
+            <TextBlock Text="Repository foundation — tracking is not implemented." />
+        </StackPanel>
+    </Grid>
+</Window>
