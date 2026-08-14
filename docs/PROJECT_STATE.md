@@ -1,7 +1,7 @@
 # Stato del progetto
 
 **Aggiornato:** 2026-08-14
-**Fase:** Sprint 00 — fondazione repository (validazione post-upgrade in corso)
+**Fase:** Sprint 00 — fondazione repository (completato)
 
 ## Completato in questa fase
 
@@ -12,6 +12,7 @@
 - La CI definisce validazione Linux cross-platform e build/test della solution completa su Windows.
 - La precedente CI Windows è diventata verde dopo il passaggio da `dotnet build` a Visual Studio MSBuild, che risolve correttamente i task PRI/AppX di WinUI.
 - La baseline è stata aggiornata a .NET 10 LTS e Microsoft.WindowsAppSDK 2.3.1 stabile, mantenendo Windows 10 1809 come versione minima di esecuzione e 19041 come Target Platform Version.
+- La CI post-upgrade della PR #1 è risultata verde sia nel job Linux cross-platform sia nel job Windows della solution completa; Sprint 00 è completato.
 
 ## Intenzionalmente non implementato
 
@@ -22,11 +23,11 @@ Sprint 00 non implementa raccolta attività/file/browser, classificazione, schem
 - I lock file NuGet sono rigenerati per .NET 10 e le dipendenze aggiornate.
 - La validazione cross-platform locale comprende restore bloccato, build, test e verifica del formato.
 - Launch WinUI, adapter OS, MSIX, accessibilità e profiling delle risorse richiedono Windows e non sono convalidabili nell'ambiente Linux locale.
-- La precedente configurazione Windows con Visual Studio MSBuild è confermata verde; dopo l'upgrade a .NET 10/Windows App SDK 2.3.1, Sprint 00 torna deliberatamente **non completato** finché i nuovi job Linux e Windows della PR #1 non risultano entrambi verdi.
+- La CI della baseline finale .NET 10 LTS / Windows App SDK 2.3.1 è verde su entrambi i job della PR #1: restore, formattazione, build e test cross-platform su Linux, oltre a restore, build della solution completa e test su Windows.
 
 ## Prossimo task sicuro
 
-Verificare i risultati della CI della PR #1 dopo l'upgrade. Solo quando entrambi i job sono verdi, segnare Sprint 00 completato e procedere con progettazione test-first di semantica temporale, osservazioni e persistenza SQLite prevista dallo Sprint 01.
+Avviare lo Sprint 01 con la progettazione test-first della semantica temporale, delle osservazioni e della persistenza SQLite, mantenendo i confini architetturali e i vincoli privacy definiti nello Sprint 00.
 
 ## Rischi noti
 
