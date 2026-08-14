@@ -1,81 +1,96 @@
-# Product specification
+# Specifica di prodotto
 
-## Purpose
+## Scopo
 
-PC Activity Tracker helps a single user reconstruct a digital workday without surrendering a detailed activity history to a cloud service. It observes coarse application focus, relevant document context, and explicitly supported browser activity; groups observations into sessions; applies user-controlled classification; and presents a local dashboard.
+PC Activity Tracker è un progetto autonomo e una singola applicazione desktop Windows che aiuta un utente a ricostruire la propria giornata digitale senza trasferire a un servizio cloud la cronologia dettagliata delle attività. Rileva applicazioni in primo piano, documenti pertinenti e attività browser esplicitamente supportata; organizza le osservazioni in sessioni; applica classificazioni controllabili dall'utente; presenta dashboard e report locali.
 
-## V1 outcomes
+## Risultati attesi dalla V1
 
-A successful V1 will let a user:
+La V1 deve consentire all'utente di:
 
-1. Start and stop tracking, with an obvious persistent status.
-2. Review a local timeline of applications and meaningful file/browser context.
-3. Assign and correct project, job/commessa, and category labels.
-4. Define deterministic classification rules and understand why a rule matched.
-5. View daily and period summaries while offline.
-6. Export or delete their data and configure retention.
-7. Pause tracking and exclude applications, titles, paths, domains, or private browser contexts.
+1. avviare, mettere in pausa e fermare il tracking, con stato sempre evidente e una modalità privata;
+2. ricostruire il tempo effettivo di foreground/focus distinguendolo da inattività, blocco, sospensione e cambi di applicazione;
+3. consultare una timeline giornaliera di applicazioni, file/documenti pertinenti e siti browser supportati;
+4. organizzare e correggere le attività per progetto, commessa e categoria;
+5. applicare regole deterministiche e spiegabili, con una coda dedicata alle attività non classificate;
+6. usare una dashboard locale, una ricerca operativa globale e viste di progetto/commessa;
+7. produrre report e proposte di timesheet/work-log, esportarli e riprendere il lavoro dal contesto precedente;
+8. gestire esclusioni, retention, eliminazione e backup locale;
+9. svolgere tutti i flussi core offline, senza account, cloud o AI obbligatori.
 
-## Users and operating context
+## Utenti e contesto operativo
 
-The initial product serves one knowledge worker on one Windows device. Multi-user administration, organizational surveillance, employee scoring, and remote monitoring are explicitly outside the product intent.
+Il prodotto iniziale serve un singolo knowledge worker su un dispositivo Windows. Amministrazione multiutente, sorveglianza organizzativa, scoring dei dipendenti e monitoraggio remoto sono estranei allo scopo.
 
-## Functional scope
+## Scope funzionale V1
 
-### Activity collection
+### Raccolta e tempo attendibile
 
-- Capture foreground application identity and time intervals with event-driven APIs where practical.
-- Capture a sanitized reference to an open file only for supported applications and only when configured.
-- Accept browser navigation metadata from an opt-in browser integration, excluding private/incognito sessions.
-- Recover conservatively from sleep, lock, process exit, and application shutdown so idle time is not misreported as work.
+- Tracking delle applicazioni/programmi in foreground con API event-driven quando possibile.
+- Tracking dei file/documenti utilizzati nelle applicazioni esplicitamente supportate, con riferimenti minimizzati e configurabili.
+- Tracking di browser/siti tramite integrazione opt-in, senza sessioni private/incognito e senza query string o fragment per impostazione predefinita.
+- Idle detection e calcolo del vero tempo di foreground/focus, con gestione conservativa di sleep, lock, arresto, processi terminati e dati inaccessibili.
+- Comandi di pausa, private mode ed esclusione per applicazioni, titoli, percorsi e domini.
 
-### Classification
+### Organizzazione e classificazione
 
-- Evaluate deterministic, ordered rules over normalized activity metadata.
-- Preserve the rule and reason behind each automatic classification.
-- Allow manual corrections without rewriting raw observations.
-- Keep any future AI suggestion local or explicitly opt-in; the product remains complete without it.
+- Progetti, commesse e categorie configurabili.
+- Regole deterministiche ordinate, con regola e motivazione conservate per ogni classificazione automatica.
+- Correzioni manuali che non riscrivono le osservazioni grezze.
+- Coda operativa delle attività non classificate.
+- Distinzione visibile tra dati osservati, inferiti, assegnati manualmente e non classificati.
 
-### Reporting and controls
+### Consultazione, ripresa e report
 
-- Provide timeline, totals, filters, and correction workflows.
-- Expose pause, exclusions, retention, export, and deletion controls.
-- Clearly distinguish observed, inferred, manually assigned, and unclassified data.
+- Timeline giornaliera e dashboard locale con totali e filtri.
+- Ricerca operativa globale per data, applicazione, file, progetto/commessa e dominio.
+- Viste progetto/commessa con tempo, timeline, file e attività correlate.
+- Report giornalieri, settimanali, mensili e per progetto/commessa.
+- Export CSV, XLSX, JSON e PDF oppure HTML; i formati esatti e le librerie saranno scelti con decisioni tecniche future.
+- Supporto alla ricostruzione del lavoro e generazione di una proposta modificabile di timesheet/work-log.
+- Funzione “riprendi da dove avevi lasciato” basata esclusivamente sul contesto locale consentito.
+- Invio email opzionale del solo report finale; non è richiesto per generare o consultare il report e non introduce un backend obbligatorio.
 
-## Privacy and security requirements
+### Gestione dei dati
 
-- Never capture keystrokes or clipboard contents.
-- Never take continuous screenshots. Any future user-initiated capture requires a separate decision and consent design.
-- Minimize captured strings and prefer normalized application/path/domain identifiers over full content.
-- Keep the database local by default and do not require authentication or internet access.
-- Do not introduce Supabase in V1.
-- Avoid collecting URL query strings and fragments by default; provide domain/path filtering before persistence.
-- Store configuration and activity data in the user's application-data boundary with least-privilege file access.
-- Make tracking state and deletion outcomes visible and auditable.
+- SQLite locale come fonte primaria di verità.
+- Retention configurabile, eliminazione verificabile ed esclusioni applicate prima possibile nel flusso dati.
+- Backup e ripristino locali avviati dall'utente.
 
-## Non-functional requirements
+### AI opzionale
 
-- **Offline:** collection, classification, correction, and reporting work with no network.
-- **Efficiency:** collectors favor OS events, batching, bounded queues, and configurable sampling over tight polling.
-- **Reliability:** writes are transactional; shutdown and migration are recoverable; raw events are not silently reclassified.
-- **Explainability:** deterministic decisions carry a rule identifier and human-readable rationale.
-- **Testability:** domain, reporting, browser normalization, and data behavior are testable without Windows.
-- **Accessibility:** the WinUI interface follows Windows accessibility, keyboard, contrast, and scaling guidance.
+Eventuali suggerimenti AI sono adapter opzionali, esplicitamente attivabili e sostituibili. Raccolta, classificazione deterministica, correzione, ricerca, dashboard e report devono restare completi senza AI e senza rete.
 
-## Explicitly out of scope for Sprint 00
+## Requisiti di privacy e sicurezza
 
-Sprint 00 delivers repository, build, dependency, documentation, and test foundations only. It does not implement collection, a production database schema, classification, reporting UI, browser extensions, sync, telemetry, installers, AI, or automatic updates.
+- Non acquisire mai tasti premuti, clipboard, webcam o microfono.
+- Non eseguire screenshot continui.
+- Minimizzare le stringhe raccolte e preferire identificatori normalizzati di applicazione, percorso e dominio ai contenuti completi.
+- Conservare database e configurazione nel perimetro dati dell'utente con privilegi minimi.
+- Non richiedere autenticazione, internet, servizio cloud o Supabase in V1.
+- Rendere visibili e verificabili stato del tracking, provenienza delle classificazioni ed esito delle eliminazioni.
 
-## V1 exclusions
+## Requisiti non funzionali
 
-- Mandatory accounts, cloud database, or cloud sync.
-- Supabase.
-- Keylogging, content inspection, continuous screenshots, webcam, or microphone collection.
-- macOS/Linux desktop clients.
-- Team dashboards, manager surveillance, billing, and mobile clients.
-- AI-required classification.
+- **Offline:** raccolta, classificazione, correzione, ricerca, dashboard e reporting funzionano senza rete.
+- **Efficienza:** collector event-driven, batch, code limitate e campionamento configurabile prevalgono sul polling stretto.
+- **Affidabilità:** scritture transazionali, migrazioni recuperabili e nessuna riclassificazione silenziosa dei dati grezzi.
+- **Spiegabilità:** ogni decisione deterministica conserva identificativo e motivazione leggibile.
+- **Testabilità:** dominio, reporting, normalizzazione browser e persistenza sono testabili senza Windows.
+- **Accessibilità:** la UI WinUI segue le linee guida Windows per tastiera, contrasto, scaling e tecnologie assistive.
 
-## Acceptance principles
+## Esplicitamente fuori scope per Sprint 00
 
-Each product increment must state what data it reads, transforms, persists, displays, exports, and deletes; prove offline behavior for its scope; provide deterministic tests where possible; and identify Windows-runtime validation separately.
+Sprint 00 consegna soltanto fondazione del repository, build, confini delle dipendenze, documentazione e infrastruttura di test. Non implementa le funzionalità V1 elencate sopra, schema SQLite di produzione, estensioni browser, packaging, telemetria, AI o aggiornamenti automatici.
 
+## Esclusioni V1
+
+- Account obbligatori, database cloud, sincronizzazione cloud e Supabase.
+- Keylogging, ispezione del contenuto, screenshot continui, webcam o microfono.
+- Client desktop macOS/Linux.
+- Dashboard di team, sorveglianza manageriale, billing e client mobili.
+- AI necessaria alla classificazione o a qualsiasi workflow core.
+
+## Principi di accettazione
+
+Ogni incremento deve dichiarare quali dati legge, trasforma, persiste, mostra, esporta ed elimina; dimostrare il comportamento offline; includere test deterministici dove possibile; e separare chiaramente la validazione che richiede Windows.

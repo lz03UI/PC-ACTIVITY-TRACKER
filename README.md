@@ -1,45 +1,45 @@
 # PC Activity Tracker
 
-PC Activity Tracker is a privacy-first Windows desktop application intended to reconstruct a user's digital workday from application, relevant-file, and browser activity, then organize that activity by project, job/commessa, and category.
+PC Activity Tracker è una singola applicazione desktop Windows, local-first e attenta alla privacy, pensata per ricostruire la giornata digitale dell'utente da attività di applicazioni, file pertinenti e browser, organizzandola per progetto, commessa e categoria.
 
-> **Status:** Sprint 00 repository foundation. Tracking, classification, persistence, browser collection, and dashboard features are intentionally not implemented yet.
+> **Stato:** fondazione Sprint 00. Tracking, classificazione, persistenza, integrazione browser e dashboard non sono ancora implementati.
 
-## Product principles
+## Principi di prodotto
 
-- Windows desktop, built with C#/.NET and WinUI 3.
-- SQLite is the local primary source of truth.
-- Tracking and the dashboard operate fully offline; there is no mandatory backend.
-- V1 does not use Supabase.
-- No keylogging and no continuous screenshots.
-- Privacy and low resource use are design requirements, not follow-up work.
-- Deterministic rules precede optional AI assistance.
+- Desktop Windows con C#/.NET e WinUI 3.
+- SQLite è la fonte primaria di verità locale.
+- Tracking e dashboard funzionano completamente offline, senza backend obbligatorio.
+- La V1 non usa Supabase.
+- Nessun keylogging e nessuno screenshot continuo.
+- Privacy e basso consumo di risorse sono requisiti di progetto.
+- Le regole deterministiche precedono qualsiasi assistenza AI opzionale.
 
-## Repository map
+## Mappa del repository
 
-| Path | Responsibility | Platform |
+| Percorso | Responsabilità | Piattaforma |
 | --- | --- | --- |
-| `src/PcActivityTracker.Core` | Domain types, policies, and abstractions | Cross-platform |
-| `src/PcActivityTracker.Data` | SQLite persistence adapters | Cross-platform |
-| `src/PcActivityTracker.Reporting` | Queries and report composition | Cross-platform |
-| `src/PcActivityTracker.BrowserIntegration` | Browser-neutral contracts and normalization | Cross-platform |
-| `src/PcActivityTracker.Windows` | Windows activity collection and OS adapters | Windows |
-| `src/PcActivityTracker.Desktop` | WinUI 3 composition root and presentation | Windows |
-| `tests/PcActivityTracker.Core.UnitTests` | Fast business-logic tests | Cross-platform |
-| `tests/PcActivityTracker.ArchitectureTests` | Automated dependency-boundary checks | Cross-platform |
+| `src/PcActivityTracker.Core` | Tipi di dominio, policy e astrazioni | Cross-platform |
+| `src/PcActivityTracker.Data` | Adapter di persistenza SQLite | Cross-platform |
+| `src/PcActivityTracker.Reporting` | Query e composizione dei report | Cross-platform |
+| `src/PcActivityTracker.BrowserIntegration` | Contratti browser-neutral e normalizzazione | Cross-platform |
+| `src/PcActivityTracker.Windows` | Raccolta attività e adapter OS Windows | Windows |
+| `src/PcActivityTracker.Desktop` | Composition root e presentazione WinUI 3 | Windows |
+| `tests/PcActivityTracker.Core.UnitTests` | Unit test della logica di business | Cross-platform |
+| `tests/PcActivityTracker.ArchitectureTests` | Test automatici dei confini di dipendenza | Cross-platform |
 
-See [the architecture guide](docs/ARCHITECTURE.md) for dependency rules.
+Consultare [la guida architetturale](docs/ARCHITECTURE.md) per le regole sulle dipendenze.
 
-## Prerequisites
+## Prerequisiti
 
-- .NET 8 SDK
-- Visual Studio 2022 17.8+ with the **WinUI application development** workload for desktop execution and packaging
-- Windows 10 version 1809 (build 17763) or later to run the desktop application
+- .NET 10 SDK (10.0.400 o feature band compatibile).
+- Una versione di Visual Studio compatibile con .NET 10 e workload **WinUI application development**, per build, esecuzione e packaging desktop.
+- Windows 10 versione 1809 (build 17763) o successiva per eseguire l'applicazione desktop.
 
-The cross-platform libraries and tests are designed to build in Linux-based Codex environments. The complete solution, including the WinUI project, is validated on Windows CI.
+Le librerie e i test cross-platform sono progettati per compilare anche negli ambienti Linux di Codex. La solution completa, incluso il progetto WinUI, è validata dalla CI Windows.
 
-## Build and test
+## Build e test
 
-Cross-platform validation:
+Validazione cross-platform:
 
 ```bash
 dotnet restore PcActivityTracker.CrossPlatform.sln --locked-mode
@@ -48,21 +48,21 @@ dotnet test PcActivityTracker.CrossPlatform.sln --no-build --configuration Relea
 dotnet format PcActivityTracker.CrossPlatform.sln --verify-no-changes --no-restore
 ```
 
-Complete Windows validation:
+Validazione completa su Windows, da un Developer PowerShell con Visual Studio MSBuild nel `PATH`:
 
 ```powershell
-dotnet restore PcActivityTracker.sln --locked-mode
-dotnet build PcActivityTracker.sln --no-restore --configuration Release
-dotnet test PcActivityTracker.sln --no-build --configuration Release
-dotnet format PcActivityTracker.sln --verify-no-changes --no-restore
+msbuild PcActivityTracker.sln -target:Restore -property:RestoreLockedMode=true -property:Configuration=Release -property:Platform="Any CPU"
+msbuild PcActivityTracker.sln -target:Build -property:Configuration=Release -property:Platform="Any CPU" -property:RestorePackages=false -maxCpuCount
+dotnet test PcActivityTracker.sln --configuration Release --no-build
+dotnet format PcActivityTracker.CrossPlatform.sln --verify-no-changes --no-restore
 ```
 
-NuGet lock files are committed for reproducible restores. Use `dotnet restore --use-lock-file --force-evaluate` only when intentionally updating dependencies, then review and commit the lock-file changes.
+Visual Studio MSBuild è necessario per risolvere i task PRI/AppX importati da WinUI; `dotnet build` non è il comando supportato per la build completa in questa configurazione. I lock file NuGet sono versionati per restore riproducibili. Usare `dotnet restore --use-lock-file --force-evaluate` solo per aggiornare intenzionalmente le dipendenze, poi revisionare e committare i lock file.
 
-## Contributing
+## Contribuire
 
-Read [`AGENTS.md`](AGENTS.md) before making changes. Product scope, decisions, roadmap, and current status live in [`docs/`](docs/). Use a dedicated branch, keep commits focused, and explain any Windows-only validation gap in the pull request.
+Leggere [`AGENTS.md`](AGENTS.md) prima di apportare modifiche. Scope, decisioni, roadmap e stato corrente si trovano in [`docs/`](docs/). Usare un branch dedicato, mantenere i commit focalizzati e dichiarare nella pull request ogni lacuna di validazione Windows-only.
 
-## License
+## Licenza
 
-No license has been selected. All rights are reserved until the project owner adds one.
+Non è stata ancora scelta una licenza. Tutti i diritti restano riservati finché il proprietario del progetto non ne aggiunge una.

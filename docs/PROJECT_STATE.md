@@ -1,36 +1,35 @@
-# Project state
+# Stato del progetto
 
-**Updated:** 2026-08-14  
-**Phase:** Sprint 00 — repository foundation (validazione Windows in corso)
+**Aggiornato:** 2026-08-14
+**Fase:** Sprint 00 — fondazione repository (validazione post-upgrade in corso)
 
-## Completed in this phase
+## Completato in questa fase
 
-- Product constraints, architectural boundaries, roadmap, and decision log are documented.
-- Complete and cross-platform .NET solution structures are defined.
-- Six production project shells and two test projects are present.
-- A minimal WinUI 3 shell and neutral assembly markers establish compile-time boundaries.
-- Architecture tests prohibit platform and persistence dependencies from leaking into Core.
-- GitHub Actions defines Linux cross-platform and Windows full-solution validation.
+- Vincoli di prodotto, confini architetturali, scope V1, roadmap e decision log sono documentati.
+- Sono presenti solution completa e cross-platform, sei progetti di produzione e due progetti di test.
+- Una shell WinUI 3 minima e marker assembly neutrali stabiliscono i confini a compile time.
+- I test architetturali impediscono che dipendenze di piattaforma e persistenza entrino in Core.
+- La CI definisce validazione Linux cross-platform e build/test della solution completa su Windows.
+- La precedente CI Windows è diventata verde dopo il passaggio da `dotnet build` a Visual Studio MSBuild, che risolve correttamente i task PRI/AppX di WinUI.
+- La baseline è stata aggiornata a .NET 10 LTS e Microsoft.WindowsAppSDK 2.3.1 stabile, mantenendo Windows 10 1809 come versione minima di esecuzione e 19041 come Target Platform Version.
 
-## Intentionally not implemented
+## Intenzionalmente non implementato
 
-No activity collection, classification rules, production SQLite schema, reports, browser extension, application telemetry, cloud service, AI, packaging, or update mechanism exists yet.
+Sprint 00 non implementa raccolta attività/file/browser, classificazione, schema SQLite di produzione, timeline, dashboard, ricerca, report, export, backup, AI o altre funzionalità applicative V1.
 
-## Validation status
+## Stato della validazione
 
-- Static repository and XML structure can be inspected in the current environment.
-- A local .NET 8 SDK bootstrap was used to restore, build, test, and format-check the cross-platform solution successfully; NuGet lock files are committed.
-- WinUI application launch, OS adapters, MSIX behavior, accessibility, and Windows resource profiling require a Windows runtime and remain unvalidated.
-- Il primo tentativo della CI Windows ha confermato restore e build dei progetti neutrali e di `PcActivityTracker.Windows`, ma `dotnet build` non ha trovato i task PRI/AppX installati con Visual Studio (`Microsoft.Build.Packaging.Pri.Tasks.dll`).
-- Il job Windows ora configura Visual Studio MSBuild tramite `microsoft/setup-msbuild` e lo usa per restore e build della soluzione completa; la nuova esecuzione della CI deve ancora confermare la correzione. Lo Sprint 00 non è considerato completato finché questo job non è verde.
+- I lock file NuGet sono rigenerati per .NET 10 e le dipendenze aggiornate.
+- La validazione cross-platform locale comprende restore bloccato, build, test e verifica del formato.
+- Launch WinUI, adapter OS, MSIX, accessibilità e profiling delle risorse richiedono Windows e non sono convalidabili nell'ambiente Linux locale.
+- La precedente configurazione Windows con Visual Studio MSBuild è confermata verde; dopo l'upgrade a .NET 10/Windows App SDK 2.3.1, Sprint 00 torna deliberatamente **non completato** finché i nuovi job Linux e Windows della PR #1 non risultano entrambi verdi.
 
-## Next safe task
+## Prossimo task sicuro
 
-Confermare su CI Windows che Visual Studio MSBuild compili la soluzione completa e che tutti i test passino. Solo dopo procedere alla progettazione, guidata dai test, della semantica temporale/delle osservazioni e della persistenza SQLite.
+Verificare i risultati della CI della PR #1 dopo l'upgrade. Solo quando entrambi i job sono verdi, segnare Sprint 00 completato e procedere con progettazione test-first di semantica temporale, osservazioni e persistenza SQLite prevista dallo Sprint 01.
 
-## Known risks
+## Rischi noti
 
-- The Windows App SDK project has not been compiled or launched on Windows in this environment.
-- La correzione del workflow dipende dalla disponibilità dei workload WinUI/AppX nell'immagine GitHub Actions `windows-latest` e deve essere verificata dalla nuova esecuzione della PR #1.
-- The empty Windows adapter project proves layering only, not Windows API feasibility or resource consumption.
-- Privacy requirements need a formal threat/data-flow review before collectors or browser integration persist data.
+- Le prove strutturali non dimostrano ancora fattibilità, affidabilità o consumo di risorse degli adapter Windows.
+- I requisiti privacy richiedono threat model e data-flow review prima che collector o integrazione browser persistano dati reali.
+- Formati export, modalità email e applicazioni/browser supportati richiedono decisioni implementative dedicate, senza modificare i vincoli local-first e offline del core.

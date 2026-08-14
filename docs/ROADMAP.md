@@ -1,52 +1,53 @@
 # Roadmap
 
-Milestones describe intent, not dates. Product learning and privacy review may reorder work.
+Le milestone descrivono lo scope della V1, non date rigide. Apprendimento sul prodotto e review privacy possono riordinare il lavoro senza rimuovere i risultati V1 definiti nella specifica.
 
-## Sprint 00 — repository foundation (current)
+## Sprint 00 — fondazione repository (corrente)
 
-- Establish solution/project boundaries, central build settings, CI, and documentation.
-- Provide a minimal WinUI shell and cross-platform library markers.
-- Add unit and architecture-test infrastructure.
-- Confirm cross-platform and Windows validation paths.
+- Definire confini di solution/progetti, impostazioni centrali, CI e documentazione.
+- Fornire una shell WinUI minima e assembly neutri verificabili su Linux.
+- Aggiungere infrastruttura per unit test e test architetturali.
+- Validare .NET 10 LTS e Windows App SDK stabile su pipeline Linux e Windows.
 
-Exit: repository is reviewable and structurally buildable; Windows CI is defined; no advanced feature is implied complete.
+**Exit:** repository revisionabile e compilabile; entrambe le pipeline successive alla migrazione tecnologica sono verdi; nessuna funzionalità applicativa avanzata è considerata implementata.
 
-## Sprint 01 — domain and persistence design
+## Sprint 01 — dominio, tempo e persistenza
 
-- Model observations, activity intervals, classifications, provenance, and exclusions.
-- Specify lifecycle, clock/time-zone, and retention semantics.
-- Design versioned SQLite schema and transactional migration strategy.
-- Add unit and SQLite integration tests, including crash-oriented cases.
+- Modellare osservazioni, intervalli, provenance, classificazioni, progetti, commesse, categorie ed esclusioni.
+- Definire semantica di clock/fuso orario, idle, foreground/focus time, lock, sleep e retention.
+- Progettare schema SQLite versionato, migrazioni transazionali e backup/ripristino locale.
+- Aggiungere unit test e integration test SQLite, inclusi casi di recovery.
 
-## Sprint 02 — minimal Windows collection
+## Sprint 02 — raccolta Windows di applicazioni e file
 
-- Implement visible start/pause/stop state.
-- Collect foreground-application intervals using event-driven Windows APIs.
-- Handle lock, sleep, idle, shutdown, inaccessible processes, and bounded buffering.
-- Measure CPU, memory, wakeups, and database growth on representative Windows systems.
+- Implementare stato visibile start/pausa/private mode/stop.
+- Raccogliere intervalli delle applicazioni/programmi in foreground tramite API Windows event-driven.
+- Rilevare file/documenti per le applicazioni supportate con minimizzazione, consenso ed esclusioni.
+- Gestire idle, lock, sleep, shutdown, processi inaccessibili e buffering limitato.
+- Misurare CPU, memoria, wakeup e crescita del database su sistemi Windows rappresentativi.
 
-## Sprint 03 — deterministic classification
+## Sprint 03 — browser e classificazione deterministica
 
-- Implement ordered, explainable rules and manual correction.
-- Add project, job/commessa, and category configuration.
-- Preserve raw observation and classification provenance.
+- Integrare browser supportati con consenso opt-in, minimizzazione degli URL ed esclusione della navigazione privata.
+- Implementare regole ordinate e spiegabili per progetto, commessa e categoria.
+- Aggiungere correzioni manuali e coda delle attività non classificate preservando osservazioni e provenance.
 
-## Sprint 04 — local dashboard and controls
+## Sprint 04 — timeline, dashboard e ricerca
 
-- Implement timeline and summary read models and accessible WinUI views.
-- Add exclusions, retention, export, deletion, and database-health controls.
-- Validate fully offline end-to-end use.
+- Implementare timeline giornaliera e dashboard locale accessibile.
+- Aggiungere ricerca globale per data, app, file, progetto/commessa e dominio.
+- Aggiungere viste progetto/commessa con tempo, timeline, file e attività.
+- Convalidare end-to-end offline, retention, esclusioni, eliminazione e salute database.
 
-## Sprint 05 — opt-in browser integration
+## Sprint 05 — report, work-log e continuità
 
-- Select supported browsers and document extension/native-host trust boundaries.
-- Minimize URLs before persistence and exclude private browsing.
-- Add consent, health, disconnect, and contract-test flows.
+- Generare report giornalieri, settimanali, mensili e per progetto/commessa.
+- Proporre timesheet/work-log modificabili a supporto della ricostruzione del lavoro.
+- Implementare “riprendi da dove avevi lasciato” nel rispetto di privacy ed esclusioni.
+- Esportare CSV, XLSX, JSON e PDF oppure HTML secondo le decisioni implementative.
+- Consentire facoltativamente l'invio email del solo report finale, senza rendere rete o cloud necessari.
 
-## Later candidates (not V1 commitments)
+## Dopo la V1
 
-- Supported-application file context.
-- User-initiated local backup/restore.
-- Optional AI suggestions behind explicit consent and replaceable interfaces.
-- Optional sync only after a new privacy threat model and architecture decision; no Supabase in V1.
-
+- Suggerimenti AI esclusivamente opzionali, dietro consenso esplicito e interfacce sostituibili.
+- Eventuale sincronizzazione solo dopo un nuovo threat model e una decisione architetturale; Supabase resta escluso dalla V1.

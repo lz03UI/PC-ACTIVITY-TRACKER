@@ -25,9 +25,10 @@ Keep PC Activity Tracker local-first, private, resource-efficient, and useful wi
 1. Read `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, and `docs/PROJECT_STATE.md` before changing architecture or scope.
 2. Work on a dedicated branch; do not commit directly to the default branch.
 3. Update tests and relevant documentation with behavior or architecture changes.
-4. Run `dotnet restore --locked-mode`, `dotnet build --no-restore`, `dotnet test --no-build`, and `dotnet format --verify-no-changes` when the SDK and target platform permit it.
-5. Record Windows-only validation that could not be run in the pull request.
-6. Update `docs/PROJECT_STATE.md` with meaningful progress, limitations, and the next safe task.
+4. Valida la solution cross-platform con `dotnet restore --locked-mode`, `dotnet build --no-restore`, `dotnet test --no-build`, and `dotnet format --verify-no-changes`.
+5. Su Windows esegui restore e build della solution completa (incluso WinUI) con Visual Studio MSBuild, perché i task PRI/AppX sono forniti da Visual Studio; usa `dotnet test --no-build` per i test.
+6. Registra nella pull request le validazioni Windows-only che non è stato possibile eseguire.
+7. Aggiorna `docs/PROJECT_STATE.md` con progressi significativi, limitazioni e il prossimo task sicuro.
 
 ## Code conventions
 
