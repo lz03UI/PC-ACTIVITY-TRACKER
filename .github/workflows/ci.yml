@@ -48,10 +48,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+      - name: Configure Visual Studio MSBuild
+        uses: microsoft/setup-msbuild@v2
       - name: Restore
-        run: dotnet restore PcActivityTracker.sln --locked-mode
+        # WinUI imports PRI/AppX tasks installed with Visual Studio. The dotnet
+        # SDK MSBuild does not resolve those tasks from the Visual Studio tree.
+        run: msbuild PcActivityTracker.sln -target:Restore -property:RestoreLockedMode=true -property:Configuration=Release -property:Platform="Any CPU"
       - name: Build
-        run: dotnet build PcActivityTracker.sln --configuration Release --no-restore
+        run: msbuild PcActivityTracker.sln -target:Build -property:Configuration=Release -property:Platform="Any CPU" -property:RestorePackages=false -maxCpuCount
       - name: Test
         run: dotnet test PcActivityTracker.sln --configuration Release --no-build --logger "trx;LogFileName=windows.trx"
       - name: Upload test results
