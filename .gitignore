@@ -1,0 +1,53 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+artifacts/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.xml
+
+# Visual Studio / VS Code / Rider
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+_ReSharper*/
+*.DotSettings.user
+
+# Windows packaging
+AppPackages/
+BundleArtifacts/
+Generated Files/
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+*.msixupload
+*.cer
+
+# Local application state and databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+localsettings.json
+
+# Logs, diagnostics, and OS files
+*.log
+*.dmp
+.DS_Store
+Thumbs.db
+
+# Secrets and local environment overrides
+.env
+.env.*
+!.env.example
+secrets.json
+

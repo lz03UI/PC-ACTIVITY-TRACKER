@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\PcActivityTracker.Core\PcActivityTracker.Core.csproj" />
+  </ItemGroup>
+</Project>
