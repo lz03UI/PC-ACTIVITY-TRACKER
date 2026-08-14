@@ -26,7 +26,7 @@ Domain values, deterministic policies, use-case-neutral interfaces, and time abs
 
 ### Data
 
-SQLite connection, migrations, repositories, transactions, and retention implementation. It remains cross-platform so schema and repository behavior can be tested on Linux using temporary databases. A schema will be designed in a later sprint.
+SQLite connection, migrations, repositories, transactions, and retention implementation. It remains cross-platform so schema and repository behavior can be tested on Linux using temporary databases. Da Sprint 01 espone adapter orientati ai casi d'uso per osservazioni, intervalli, classificazioni, privacy e tassonomia; il Core contiene solo le relative porte e non conosce SQLite.
 
 ### Reporting
 
@@ -86,3 +86,17 @@ Use OS event hooks rather than rapid polling; bounded channels and backpressure;
 
 Collectors must tolerate inaccessible processes and malformed external data. Failures are contained at adapters, queues are bounded, persistence is transactional, and cancellation is honored. Do not use broad exception swallowing; surface privacy-safe diagnostics and degraded state to the user.
 
+## Fondazione Sprint 01
+
+Il dominio rappresenta istanti UTC, contesto locale (identificativo del fuso e offset osservato), intervalli semiaperti, stato active/idle/locked/suspended/paused/private e discontinuità di clock. Il timestamp monotonic è un valore distinto dal wall clock: i collector futuri lo useranno per misurare il tempo trascorso, senza persisterlo come istante civile.
+
+Le `RawObservation` sono append-only e contengono solo contesti minimizzati di applicazione, file o browser. Le classificazioni sono record separati e conservano target, provenance, regola opzionale, motivazione e timestamp. Le esclusioni sono leggibili prima dell'ingestione affinché gli adapter possano scartare dati sensibili prima della persistenza. Modalità incognito, contenuti digitati, clipboard, form data e screenshot non hanno alcuna rappresentazione persistibile.
+
+`PcActivityTracker.Data` usa un database SQLite locale con foreign key per connessione, WAL, synchronous NORMAL, busy timeout di 5 secondi e migrazioni SQL esplicite. Lo schema v1 comprende:
+
+- `schema_info` per la versione;
+- `observations` e `activity_intervals`, indicizzati temporalmente;
+- `classifications`, con indici su target, progetto, commessa e categoria;
+- `projects`, `jobs`, `categories` ed `exclusions`.
+
+La cancellazione retention parte dalle osservazioni e usa cascade per gli intervalli. Il trigger impedisce l'aggiornamento delle osservazioni grezze; la cancellazione resta consentita per retention e diritto dell'utente alla rimozione. Sono rinviati a sprint successivi batching misurato, backup/ripristino, motore di regole, sessionizzazione derivata, ricerca full-text ed eventuale cifratura at-rest: nessuno di questi rinvii introduce rete o cloud.

@@ -59,3 +59,25 @@ Decisions are append-only. Supersede an entry rather than silently rewriting its
 - Dependency injection, logging, and configuration libraries.
 - Packaging, signing, update, and release channels.
 
+> Le prime due decisioni aperte sopra sono risolte dagli ADR-0008, ADR-0009 e ADR-0010. La cronologia è mantenuta senza riscrivere le voci precedenti.
+
+## ADR-0008: Semantica temporale UTC e intervalli semiaperti
+
+- **Stato:** Accepted
+- **Decisione:** Persistiamo ogni istante come `DateTimeOffset` a offset zero e ogni intervallo come `[start, end)`, con `end >= start`. Conserviamo accanto all'osservazione l'identificativo del fuso e l'offset effettivamente osservato. Wall clock e timestamp monotonic sono tipi distinti; `TimeProvider` è il confine testabile per l'ora corrente. Lock, sleep, cambi del clock/fuso e restart chiudono un intervallo con una causa esplicita.
+- **Perché:** UTC rende ordinamento e durata non ambigui; zona più offset ricostruiscono correttamente la vista locale anche attraverso DST o cambio fuso. Il clock monotonic protegge il calcolo futuro da salti dell'orologio civile.
+- **Conseguenze:** I collector futuri non devono calcolare durate da due letture wall-clock quando è disponibile il clock monotonic. Gli intervalli adiacenti non si sovrappongono e non esistono durate negative. Il monotonic non è convertibile in un istante UTC e non viene usato come tale.
+
+## ADR-0009: Evidenza grezza immutabile e classificazione separata
+
+- **Stato:** Accepted
+- **Decisione:** `RawObservation` è un valore immutabile append-only; in SQLite un trigger ne vieta gli update. Correzioni, inferenze e suggerimenti sono nuove righe `classifications`, con target, timestamp, motivazione, rule id opzionale e provenance `manual`, `deterministic rule`, `system/inferred` o `AI suggestion`. Un suggerimento AI non è autorevole.
+- **Perché:** Separare evidenza e interpretazione rende correzioni verificabili, impedisce riclassificazioni silenziose e mantiene il core offline e deterministico.
+- **Conseguenze:** Più classificazioni possono riferirsi allo stesso target e una vista futura dovrà scegliere quella efficace secondo policy esplicita. La cancellazione retention dell'evidenza non equivale a una sua modifica. I collector devono applicare esclusioni e minimizzazione prima di costruire/persistire l'osservazione; incognito e query/fragment non sono accettati dal modello browser.
+
+## ADR-0010: SQLite con migrazioni SQL esplicite
+
+- **Stato:** Accepted
+- **Decisione:** Usiamo `Microsoft.Data.Sqlite` e una sequenza ordinata di script SQL numerati, ciascuno applicato insieme all'aggiornamento di `schema_info` in una singola transazione. Non introduciamo EF Core o un migration framework. Ogni connessione abilita foreign key, WAL, synchronous NORMAL e busy timeout.
+- **Perché:** SQL esplicito ha overhead e superficie dipendenze minimi, rende schema e vincoli revisionabili e consente integration test reali su Linux.
+- **Conseguenze:** Le migrazioni devono essere additive, deterministiche, senza buchi e testate sia nel percorso da una versione precedente sia nel rollback. Le modifiche future aggiungono una nuova migrazione invece di alterare quella pubblicata. Backup/ripristino, recovery da corruzione, compattazione e benchmark dei batch saranno decisi prima dell'uso di produzione dei collector.
