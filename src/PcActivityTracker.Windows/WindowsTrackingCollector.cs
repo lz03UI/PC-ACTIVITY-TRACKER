@@ -13,6 +13,7 @@ public sealed record WindowsCollectorOptions
 {
     public TimeSpan IdleThreshold { get; init; } = TimeSpan.FromMinutes(5);
     public TimeSpan IdleCheckInterval { get; init; } = TimeSpan.FromSeconds(5);
+    public TimeSpan DocumentRefreshInterval { get; init; } = TimeSpan.FromSeconds(15);
     public int ChannelCapacity { get; init; } = 128;
 }
 
@@ -42,15 +43,18 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
     private readonly SemaphoreSlim producerGate = new(1, 1);
     private CancellationTokenSource? lifetime;
     private Task? idleWorker;
+    private Task? documentRefreshWorker;
     private nint hook;
     private bool idle;
     private long dropped, generation, sequence;
     private RawSignal? signalLoss;
     private RawSignal? reconciliation;
+    private RawSignal? documentRefresh;
     private RawSignal? controlOverflow;
     private RawSignal? conditionsOverflow;
     private int desiredIdle, desiredLocked, desiredDisconnected, desiredSuspended;
     private volatile bool accepting;
+    private volatile bool foregroundSupportsDocumentRefresh;
 
     public WindowsTrackingCollector(IWindowsNativeFacade native, WindowsCollectorOptions? options = null,
         TimeProvider? timeProvider = null, RuntimeMetrics? runtimeMetrics = null, DocumentResolverRegistry? documentResolvers = null)
@@ -58,6 +62,7 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
         this.native = native; this.options = options ?? new(); time = timeProvider ?? TimeProvider.System; metrics = runtimeMetrics ?? new();
         this.documentResolvers = documentResolvers;
         if (this.options.ChannelCapacity < 1) throw new ArgumentOutOfRangeException(nameof(options));
+        if (this.options.DocumentRefreshInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(options));
         queue = Channel.CreateBounded<RawSignal>(new BoundedChannelOptions(this.options.ChannelCapacity)
         { SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait });
         commandQueue = Channel.CreateBounded<RawSignal>(new BoundedChannelOptions(32)
@@ -77,6 +82,7 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
         while (wake.Reader.TryRead(out _)) { }
         Interlocked.Exchange(ref signalLoss, null);
         Interlocked.Exchange(ref reconciliation, null);
+        Interlocked.Exchange(ref documentRefresh, null);
         Interlocked.Exchange(ref controlOverflow, null);
         Interlocked.Exchange(ref conditionsOverflow, null);
         idle = false;
@@ -85,6 +91,7 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
         if (hook == 0) { lifetime.Dispose(); lifetime = null; throw new Win32Exception(Marshal.GetLastPInvokeError(), "SetWinEventHook non riuscito."); }
         accepting = true;
         idleWorker = MonitorIdleAsync(lifetime.Token);
+        documentRefreshWorker = MonitorDocumentRefreshAsync(lifetime.Token);
         return Task.CompletedTask;
     }
 
@@ -97,11 +104,15 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
         source.Cancel();
         if (idleWorker is { } worker)
             try { await worker.WaitAsync(cancellationToken); } catch (OperationCanceledException) when (source.IsCancellationRequested) { }
-        idleWorker = null; source.Dispose();
+        if (documentRefreshWorker is { } refreshWorker)
+            try { await refreshWorker.WaitAsync(cancellationToken); } catch (OperationCanceledException) when (source.IsCancellationRequested) { }
+        idleWorker = null; documentRefreshWorker = null; foregroundSupportsDocumentRefresh = false; source.Dispose();
     }
 
     public async ValueTask PublishAsync(TrackingSignalKind kind, CancellationToken cancellationToken = default)
     {
+        if (kind is TrackingSignalKind.Stop or TrackingSignalKind.Pause or TrackingSignalKind.EnterPrivate)
+            foregroundSupportsDocumentRefresh = false;
         while (true)
         {
             await producerGate.WaitAsync(cancellationToken);
@@ -114,6 +125,8 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
     public bool TryPublishOsSignal(TrackingSignalKind kind)
     {
         UpdateDesiredConditions(kind);
+        if (kind is TrackingSignalKind.IdleEntered or TrackingSignalKind.Locked or TrackingSignalKind.SessionDisconnected or TrackingSignalKind.Suspended)
+            foregroundSupportsDocumentRefresh = false;
         if (!accepting) return false;
         if (!producerGate.Wait(0)) { DeferOsSignal(kind); return false; }
         try
@@ -147,13 +160,14 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
         {
             var lost = Interlocked.CompareExchange(ref signalLoss, null, null);
             var reconcile = Interlocked.CompareExchange(ref reconciliation, null, null);
+            var refresh = Interlocked.CompareExchange(ref documentRefresh, null, null);
             var control = Interlocked.CompareExchange(ref controlOverflow, null, null);
             var conditions = Interlocked.CompareExchange(ref conditionsOverflow, null, null);
             if (pending is null) _ = queue.Reader.TryRead(out pending);
             if (pendingCommand is null) _ = commandQueue.Reader.TryRead(out pendingCommand);
             if (pending is null && pendingCommand is null)
             {
-                var deferred = Earlier(Earlier(Earlier(lost, reconcile), control), conditions);
+                var deferred = Earlier(Earlier(Earlier(Earlier(lost, reconcile), refresh), control), conditions);
                 if (deferred is not null && TakeDeferred(deferred))
                 { yield return await ResolveAsync(deferred, cancellationToken); continue; }
                 await wake.Reader.ReadAsync(cancellationToken);
@@ -161,17 +175,18 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
             }
             lost = Interlocked.CompareExchange(ref signalLoss, null, null);
             reconcile = Interlocked.CompareExchange(ref reconciliation, null, null);
+            refresh = Interlocked.CompareExchange(ref documentRefresh, null, null);
             control = Interlocked.CompareExchange(ref controlOverflow, null, null);
             conditions = Interlocked.CompareExchange(ref conditionsOverflow, null, null);
             var nextQueued = Earlier(pending, pendingCommand)!;
-            var beforePending = Earlier(Earlier(Earlier(lost, reconcile), control), conditions);
+            var beforePending = Earlier(Earlier(Earlier(Earlier(lost, reconcile), refresh), control), conditions);
             if (beforePending is not null && beforePending.Sequence < nextQueued.Sequence && TakeDeferred(beforePending))
             { yield return await ResolveAsync(beforePending, cancellationToken); continue; }
 
             var item = nextQueued;
             if (ReferenceEquals(item, pending)) pending = null; else pendingCommand = null;
             if (item.Kind == TrackingSignalKind.ForegroundChanged && item.Generation != Interlocked.Read(ref generation)) continue;
-            var snapshot = item.Kind == TrackingSignalKind.ForegroundChanged ? native.ReadForeground(item.Window) : null;
+            var snapshot = item.Kind is TrackingSignalKind.ForegroundChanged or TrackingSignalKind.DocumentRefresh ? native.ReadForeground(item.Window) : null;
             snapshot = await ResolveDocumentAsync(snapshot, item.Window, cancellationToken);
             if (item.Kind == TrackingSignalKind.ForegroundChanged && item.Generation != Interlocked.Read(ref generation)) continue;
             yield return ToTrackingSignal(item, snapshot);
@@ -181,6 +196,8 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
     private static RawSignal? Earlier(RawSignal? left, RawSignal? right) => left is null ? right : right is null || left.Sequence < right.Sequence ? left : right;
     private bool TakeDeferred(RawSignal item) => item.Kind == TrackingSignalKind.Reconcile
         ? Interlocked.CompareExchange(ref reconciliation, null, item) == item
+        : item.Kind == TrackingSignalKind.DocumentRefresh
+            ? Interlocked.CompareExchange(ref documentRefresh, null, item) == item
         : item.Kind == TrackingSignalKind.SignalLossDetected
             ? Interlocked.CompareExchange(ref signalLoss, null, item) == item
             : item.Kind == TrackingSignalKind.ConditionsChanged
@@ -188,16 +205,38 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
                 : Interlocked.CompareExchange(ref controlOverflow, null, item) == item;
     private async ValueTask<TrackingSignal> ResolveAsync(RawSignal item, CancellationToken cancellationToken)
     {
-        var snapshot = item.Kind == TrackingSignalKind.Reconcile ? native.ReadForeground(item.Window) : null;
+        var snapshot = item.Kind is TrackingSignalKind.Reconcile or TrackingSignalKind.DocumentRefresh ? native.ReadForeground(item.Window) : null;
         snapshot = await ResolveDocumentAsync(snapshot, item.Window, cancellationToken);
         return ToTrackingSignal(item, snapshot);
     }
 
     private async ValueTask<ForegroundSnapshot?> ResolveDocumentAsync(ForegroundSnapshot? snapshot, nint window, CancellationToken cancellationToken)
     {
-        if (snapshot is null || documentResolvers is null) return snapshot;
+        if (snapshot is null) { foregroundSupportsDocumentRefresh = false; return null; }
+        if (documentResolvers is null) return snapshot;
+        foregroundSupportsDocumentRefresh = documentResolvers.Supports(snapshot.ProcessName);
         var result = await documentResolvers.ResolveAsync(new(snapshot.ProcessId, snapshot.ProcessName, window), cancellationToken);
         return result.Failure == DocumentResolutionFailure.UnsupportedApplication ? snapshot : snapshot with { Document = result };
+    }
+
+    private async Task MonitorDocumentRefreshAsync(CancellationToken cancellationToken)
+    {
+        if (documentResolvers is null) return;
+        try
+        {
+            using var timer = new PeriodicTimer(options.DocumentRefreshInterval, time);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (!accepting || !foregroundSupportsDocumentRefresh || Volatile.Read(ref documentRefresh) is not null) continue;
+                RawSignal item;
+                await producerGate.WaitAsync(cancellationToken);
+                try { item = CreateRaw(TrackingSignalKind.DocumentRefresh, native.GetForegroundWindow()); }
+                finally { producerGate.Release(); }
+                Interlocked.CompareExchange(ref documentRefresh, item, null);
+                Wake();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
 
     private void OnForeground(nint hookIgnored, uint eventIgnored, nint window, int objectIgnored, int childIgnored, uint threadIgnored, uint timeIgnored)
@@ -232,8 +271,13 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
     }
     private RawSignal CreateRaw(TrackingSignalKind kind, nint window = 0) => new(kind, window, new(time.GetUtcNow()),
         new(time.GetTimestamp()), Interlocked.Increment(ref sequence), Interlocked.Read(ref generation));
-    private TrackingSignal ToTrackingSignal(RawSignal item, ForegroundSnapshot? snapshot) =>
-        new(item.Kind, item.At, item.Monotonic, snapshot, item.Sequence, time.TimestampFrequency, item.Conditions);
+    private TrackingSignal ToTrackingSignal(RawSignal item, ForegroundSnapshot? snapshot)
+    {
+        if (item.Kind is TrackingSignalKind.Stop or TrackingSignalKind.Pause or TrackingSignalKind.EnterPrivate or TrackingSignalKind.IdleEntered or
+            TrackingSignalKind.Locked or TrackingSignalKind.SessionDisconnected or TrackingSignalKind.Suspended or TrackingSignalKind.ConditionsChanged)
+            foregroundSupportsDocumentRefresh = false;
+        return new(item.Kind, item.At, item.Monotonic, snapshot, item.Sequence, time.TimestampFrequency, item.Conditions);
+    }
 
     private void UpdateDesiredConditions(TrackingSignalKind kind)
     {

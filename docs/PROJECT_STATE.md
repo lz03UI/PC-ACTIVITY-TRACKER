@@ -8,7 +8,7 @@
 - Sprint 00, Sprint 01 e Sprint 02A sono completati e confluiti in `main`.
 - Sprint 01 è stato integrato con commit `c717ffb291d465888c6ae057d7c7c3c762e93702`.
 - Sprint 02A è confluito tramite PR #3; la CI finale è verde sia nel job cross-platform sia nel job Windows completo con Visual Studio MSBuild.
-- La baseline corrente comprende 110 test: 60 Core, 25 Data integration, 8 architecture e 17 adapter Windows.
+- La baseline autorevole post-PR #5 è `main` al commit `9be15990dd7e1316ebdca9ac6c36cb36c13c23cd`, con 136 test: 63 Core, 26 Data integration, 8 architecture e 39 adapter Windows.
 
 ## Completato in Sprint 02A
 
@@ -23,7 +23,7 @@
 
 ## Sprint 02B avviato
 
-Branch di lavoro: `sprint-02b/document-resolvers-hardening`.
+Il terzo incremento è sviluppato sul branch dedicato `sprint-02b/runtime-hardening-recovery`; `main` resta la baseline autorevole.
 
 Obiettivi approvati:
 
@@ -53,6 +53,14 @@ La specifica esecutiva dello sprint è in `docs/SPRINT_02B.md`.
 - Nessuna migration v4: Excel riusa modello, provenance e schema v3.
 - Aggiunti 10 test Windows per isolamento/concurrency bounded, timeout/cancellation e contratto Excel, portando la suite a 136 test: 63 Core, 26 Data integration, 8 architecture e 39 Windows adapter.
 - Automated validation: **PASS**. Real Windows application validation: **PENDING**. Sprint 02B resta aperto.
+
+### Terzo incremento runtime/recovery/document refresh
+
+- Aggiunto refresh documentale mirato e configurabile (default 15 secondi), attivo soltanto per il foreground con resolver registrato e coalescente in un unico slot bounded ordinato.
+- Formalizzati e testati i confini documento nella stessa finestra: path/nome, resolved/unresolved e Save As chiudono il precedente intervallo al tempo monotonic osservato; refresh invariato non duplica observation.
+- Verificato il recovery del gate dopo fault e timeout: il gate è rilasciato dal lavoro reale nel `finally`, non dal caller scaduto, senza fan-out o blocco tra resolver.
+- Aggiunti contatori locali aggregati per refresh tentati, cambiati e invariati; nessun campo stringa o dato documento è incluso.
+- Nessuna migration v4: lo schema resta v3. La suite automatizzata è di 145 test (69 Core, 26 Data integration, 8 architecture, 42 Windows adapter). Sprint 02B resta **APERTO** per profiling e validazione Word/Excel reali.
 
 
 ## Ordine di implementazione Sprint 02B
@@ -85,7 +93,7 @@ La specifica esecutiva dello sprint è in `docs/SPRINT_02B.md`.
 
 ## Prossimo task sicuro
 
-Validare Word ed Excel COM su Windows reale (documento locale, unsaved, Protected View, access denied, più istanze e chiusura durante la risoluzione), quindi eseguire hardening crash/restart e profiling prolungato senza iniziare Sprint 03.
+Validare Word ed Excel COM e il refresh a 15 secondi su Windows reale (documento locale, Save As, unsaved, Protected View, access denied, più istanze e chiusura durante la risoluzione), quindi eseguire profiling prolungato senza iniziare Sprint 03.
 
 ## Rischi noti
 

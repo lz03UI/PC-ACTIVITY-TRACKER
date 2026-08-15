@@ -67,6 +67,8 @@ public sealed class DocumentResolverRegistry
         this.metrics = metrics ?? new(); time = timeProvider ?? TimeProvider.System;
     }
 
+    public bool Supports(string processName) => !string.IsNullOrWhiteSpace(processName) && resolvers.ContainsKey(Normalize(processName));
+
     public async ValueTask<DocumentResolutionResult> ResolveAsync(DocumentResolutionRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ProcessName);

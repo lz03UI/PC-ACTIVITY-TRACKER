@@ -8,7 +8,7 @@ public enum TrackingSignalKind
 {
     Start, Stop, Pause, Resume, EnterPrivate, ExitPrivate, ForegroundChanged, IdleEntered, IdleExited,
     Locked, Unlocked, SessionDisconnected, SessionReconnected, Suspended, Resumed, Reconcile,
-    ConditionsChanged, SignalLossDetected, CollectorRestarted, ClockChanged, TimeZoneChanged
+    ConditionsChanged, SignalLossDetected, CollectorRestarted, ClockChanged, TimeZoneChanged, DocumentRefresh
 }
 
 public sealed record ForegroundSnapshot(int ProcessId, string ProcessName, string? ExecutablePath = null,
@@ -29,15 +29,24 @@ public interface IExclusionEvaluator { bool IsExcluded(ForegroundSnapshot snapsh
 
 public sealed class RuntimeMetrics
 {
-    private long signals, reconciliations, writes, dropped;
+    private long signals, reconciliations, writes, dropped, documentRefreshAttempts, documentRefreshChanged, documentRefreshUnchanged;
     public long Signals => Interlocked.Read(ref signals);
     public long Reconciliations => Interlocked.Read(ref reconciliations);
     public long PersistenceWrites => Interlocked.Read(ref writes);
     public long DroppedSignals => Interlocked.Read(ref dropped);
+    public long DocumentRefreshAttempts => Interlocked.Read(ref documentRefreshAttempts);
+    public long DocumentRefreshChanged => Interlocked.Read(ref documentRefreshChanged);
+    public long DocumentRefreshUnchanged => Interlocked.Read(ref documentRefreshUnchanged);
     public void SignalReceived() => Interlocked.Increment(ref signals);
     public void ReconciliationRequested() => Interlocked.Increment(ref reconciliations);
     public void PersistenceWrite(int count) => Interlocked.Add(ref writes, count);
     public void SignalDropped() => Interlocked.Increment(ref dropped);
+    internal void DocumentRefreshed(bool changed)
+    {
+        Interlocked.Increment(ref documentRefreshAttempts);
+        if (changed) Interlocked.Increment(ref documentRefreshChanged);
+        else Interlocked.Increment(ref documentRefreshUnchanged);
+    }
 }
 
 public sealed class RuleExclusionEvaluator(IEnumerable<ExclusionRule> rules) : IExclusionEvaluator
@@ -136,7 +145,7 @@ public sealed class TrackingStateMachine(IExclusionEvaluator exclusions, Func<Lo
                 Boundary(signal, effects, DiscontinuityReason.ClockChanged); break;
             case TrackingSignalKind.TimeZoneChanged:
                 Boundary(signal, effects, DiscontinuityReason.TimeZoneChanged); break;
-            case TrackingSignalKind.ForegroundChanged or TrackingSignalKind.Reconcile when CanObserve:
+            case TrackingSignalKind.ForegroundChanged or TrackingSignalKind.Reconcile or TrackingSignalKind.DocumentRefresh when CanObserve:
                 AcceptForeground(signal, effects); break;
         }
         return effects;
@@ -230,6 +239,8 @@ public sealed class TrackingCoordinator(TrackingStateMachine machine, ITrackingB
         try
         {
             var effects = machine.Apply(signal).ToList();
+            if (signal.Kind == TrackingSignalKind.DocumentRefresh)
+                metrics.DocumentRefreshed(effects.Any(x => x is ObservationAccepted));
             if (effects.RemoveAll(x => x is ReconciliationRequired) > 0)
             {
                 metrics.ReconciliationRequested();
