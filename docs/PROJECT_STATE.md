@@ -1,9 +1,24 @@
 # Stato del progetto
 
-**Aggiornato:** 2026-08-14
-**Fase:** Sprint 01 — dominio, tempo e persistenza locale (pronto per review)
+**Aggiornato:** 2026-08-15
+**Fase:** Sprint 02A — collector Windows runtime (implementato, in validazione CI)
 
-## Completato in questa fase
+## Baseline completata
+
+- Sprint 00 e Sprint 01 sono completati e confluiti in `main`.
+- Sprint 01 è stato integrato con commit `c717ffb291d465888c6ae057d7c7c3c762e93702`.
+- La baseline Sprint 01 comprende 50 test e la CI post-merge è verde su Linux e Windows.
+
+## Completato in Sprint 02A
+
+- Implementata la state machine deterministica platform-neutral per start, foreground, idle, lock, suspend, pause, private, resume, stop, restart, duplicati e segnali stale.
+- Implementato il collector foreground Windows event-driven con hook bounded, riconciliazione, risoluzione processo tollerante agli accessi negati e idle configurabile (default cinque minuti).
+- Integrati messaggi WTS, power e shutdown/logoff best-effort e controlli minimi WinUI con stato/degrado sempre visibile.
+- Applicate esclusioni prima della creazione di `RawObservation`; Private persiste esclusivamente gap anonimi. Nessun gap `Excluded` e nessuna migration/checkpoint sono stati introdotti.
+- Aggiunte metriche locali privacy-safe per segnali, drop, riconciliazioni, scritture, CPU, working set e crescita DB.
+- Aggiunti 28 test (21 Core, 2 integrazione SQLite e 5 adapter Windows), portando il totale a 78 test.
+
+## Completato in Sprint 01
 
 - Implementato un dominio platform-neutral fortemente tipizzato per osservazioni, contesti applicazione/file/browser, stati, intervalli, discontinuità, classificazioni/provenance, esclusioni e tassonomia progetto/commessa/categoria.
 - Formalizzata la semantica UTC, `[start, end)`, fuso/offset osservato, wall clock rispetto a monotonic e accesso testabile al tempo con `TimeProvider`.
@@ -34,6 +49,8 @@ Sprint 00 non implementa raccolta attività/file/browser, classificazione, schem
 
 ## Stato della validazione
 
+- Sprint 02A: restore locked, format, build Release e 73 test cross-platform sono verdi in locale; build e 5 test dell'adapter Windows con facade fake sono verdi anche dal runner Linux.
+- La build WinUI locale non è eseguibile su Linux perché `XamlCompiler.exe` richiede Windows/Visual Studio MSBuild. La solution completa, il launch reale, hook/window lifecycle interattivi e profiling su hardware fisico restano da validare su Windows.
 - I lock file NuGet sono rigenerati per .NET 10 e le dipendenze aggiornate.
 - La validazione cross-platform locale comprende restore bloccato, build, test e verifica del formato.
 - Launch WinUI, adapter OS, MSIX, accessibilità e profiling delle risorse richiedono Windows e non sono convalidabili nell'ambiente Linux locale.
@@ -41,7 +58,7 @@ Sprint 00 non implementa raccolta attività/file/browser, classificazione, schem
 
 ## Prossimo task sicuro
 
-Sottoporre lo Sprint 01 a CI Windows (restore e build completa con Visual Studio MSBuild, test con `dotnet test --no-build`); dopo l'approvazione, pianificare Sprint 02 partendo dai contratti neutrali senza anticipare UI o integrazioni browser.
+Validare la solution completa nella CI Windows e poi avviare Sprint 02B con matrice esplicita dei resolver documentali, hardening crash/restart e profiling su hardware fisico.
 
 ## Rischi noti
 

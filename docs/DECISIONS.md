@@ -90,3 +90,17 @@ Decisions are append-only. Supersede an entry rather than silently rewriting its
 - **Decisione tassonomia:** Una classificazione contiene `project_id` oppure `job_id`, mai entrambi. Con `job_id`, il progetto è derivato dalla relazione corrente della commessa. Lo spostamento futuro di una commessa tra progetti si riflette quindi sulle classificazioni senza coppie duplicate potenzialmente contraddittorie. Dominio e database rifiutano gli identificativi vuoti della tassonomia.
 - **Perché:** Le difese in profondità impediscono persistenza accidentale di contenuti privati; la retention esatta non perde tempo successivo al cutoff; una sola fonte per la relazione job/progetto elimina stati incoerenti e definisce il comportamento dei successivi spostamenti.
 - **Conseguenze:** Gli intervalli conservati dopo la rimozione dell'evidenza possono avere `ObservationId` nullo. I consumer devono trattarli come tempo valido senza metadati identificativi. Poiché lo schema Sprint 01 non è ancora confluito in `main`, queste correzioni sono incorporate nella migration v1 prima della sua pubblicazione anziché introdurre una migration correttiva v2.
+
+## ADR-0012: Collector Windows event-driven e pipeline bounded
+
+- **Stato:** Accepted
+- **Decisione:** `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` alimenta una channel bounded tramite un callback minimale. La risoluzione dei metadata, le esclusioni, la state machine e SQLite restano fuori dal callback. Overflow incrementa una metrica non sensibile e forza una riconciliazione. `GetForegroundWindow` viene letto a start e dopo idle, unlock, resume, pause/private e perdita di segnali. Idle usa `GetLastInputInfo` soltanto per rilevare la soglia, mentre l'ordinamento runtime usa il timestamp monotonic.
+- **Perché:** Una sorgente event-driven riduce polling e wakeup; il confine bounded impedisce crescita illimitata e separa i callback Win32 dalla latenza di persistenza.
+- **Conseguenze:** Gli adapter Win32 rimangono in `PcActivityTracker.Windows`; il Core è testabile con segnali sintetici. I test interattivi e il profiling esteso richiedono un PC Windows fisico in Sprint 02B.
+
+## ADR-0013: Nessun checkpoint runtime e periodi esclusi non materializzati
+
+- **Stato:** Accepted
+- **Decisione:** Sprint 02A non aggiunge checkpoint né migration v2. Le observation accettate sono persistite immediatamente; interval e gap sono persistiti alla chiusura. Dopo crash/restart il foreground viene riconciliato senza ricostruire retroattivamente la durata ignota. Un match di esclusione non crea `RawObservation`, interval o gap `Private`/`Excluded`: lascia intenzionalmente un periodo non identificato.
+- **Perché:** Un checkpoint con metadata introdurrebbe scritture e rischio privacy sproporzionati; attribuire tempo dopo un crash non sarebbe attendibile. Riutilizzare `Private` per le esclusioni ne altererebbe la semantica, mentre una nuova categoria `Excluded` non è necessaria per 02A.
+- **Conseguenze:** Un crash può perdere l'intervallo aperto e gli elementi non ancora consumati dalla coda. Il rischio viene dichiarato e sarà misurato nell'hardening 02B; qualunque recovery persistente futura richiederà migration e ADR dedicati.

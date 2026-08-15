@@ -86,6 +86,16 @@ Use OS event hooks rather than rapid polling; bounded channels and backpressure;
 
 Collectors must tolerate inaccessible processes and malformed external data. Failures are contained at adapters, queues are bounded, persistence is transactional, and cancellation is honored. Do not use broad exception swallowing; surface privacy-safe diagnostics and degraded state to the user.
 
+## Runtime Sprint 02A
+
+L'orchestrazione resta nel Core perché è ancora una singola state machine coesa, senza giustificare un progetto `Application`. `TrackingStateMachine` riduce segnali sintetici ordinati dal timestamp monotonic e produce effetti di persistenza; `TrackingCoordinator` materializza tali effetti esclusivamente attraverso `IObservationStore`. Gli stati operativi sono `Stopped`, `Running`, `Paused` e `Private`; idle, lock e suspend sono condizioni sovrapposte che chiudono l'attività identificativa e aprono gap anonimi. Ogni uscita da una condizione di soppressione richiede una nuova snapshot foreground.
+
+Il collector Windows usa `SetWinEventHook` come sorgente primaria, una channel bounded non bloccante nel callback e `GetForegroundWindow` per la riconciliazione. Un worker separato risolve PID, nome e percorso processo; `GetLastInputInfo` genera soltanto transizioni idle con soglia predefinita di cinque minuti. I messaggi WTS, power ed end-session sono tradotti in segnali neutrali dal composition root. SQLite non è visibile al progetto Windows.
+
+Le esclusioni vengono caricate prima dell'avvio del collector e valutate prima della costruzione di `RawObservation`. Un match non crea né observation né gap semantico; il periodo resta intenzionalmente non identificato. Private produce soltanto `ActivityGap(Private)`. Il runtime non introduce checkpoint o migration v2: una observation accettata è subito persistita, mentre un crash può perdere soltanto la coda bounded e l'intervallo ancora aperto. Al riavvio si effettua una riconciliazione conservativa e non si inventa la durata perduta.
+
+`RuntimeMetrics` e `LocalResourceSnapshot` forniscono contatori locali non identificativi (segnali, drop, riconciliazioni, scritture, CPU cumulativa, working set e dimensione DB). Nessuna metrica viene trasmessa in rete.
+
 ## Fondazione Sprint 01
 
 Il dominio rappresenta istanti UTC, contesto locale (identificativo del fuso e offset osservato), intervalli semiaperti, stato active/idle/locked/suspended/paused/private e discontinuità di clock. Il timestamp monotonic è un valore distinto dal wall clock: i collector futuri lo useranno per misurare il tempo trascorso, senza persisterlo come istante civile.

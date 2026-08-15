@@ -2,7 +2,7 @@
 
 Le milestone descrivono lo scope della V1, non date rigide. Apprendimento sul prodotto e review privacy possono riordinare il lavoro senza rimuovere i risultati V1 definiti nella specifica.
 
-## Sprint 00 — fondazione repository (corrente)
+## Sprint 00 — fondazione repository (completato)
 
 - Definire confini di solution/progetti, impostazioni centrali, CI e documentazione.
 - Fornire una shell WinUI minima e assembly neutri verificabili su Linux.
@@ -11,20 +11,24 @@ Le milestone descrivono lo scope della V1, non date rigide. Apprendimento sul pr
 
 **Exit:** repository revisionabile e compilabile; entrambe le pipeline successive alla migrazione tecnologica sono verdi; nessuna funzionalità applicativa avanzata è considerata implementata.
 
-## Sprint 01 — dominio, tempo e persistenza
+## Sprint 01 — dominio, tempo e persistenza (completato)
 
 - Modellare osservazioni, intervalli, provenance, classificazioni, progetti, commesse, categorie ed esclusioni.
 - Definire semantica di clock/fuso orario, idle, foreground/focus time, lock, sleep e retention.
 - Progettare schema SQLite versionato, migrazioni transazionali e backup/ripristino locale.
 - Aggiungere unit test e integration test SQLite, inclusi casi di recovery.
 
-## Sprint 02 — raccolta Windows di applicazioni e file
+## Sprint 02A — collector Windows runtime (corrente)
 
 - Implementare stato visibile start/pausa/private mode/stop.
 - Raccogliere intervalli delle applicazioni/programmi in foreground tramite API Windows event-driven.
-- Rilevare file/documenti per le applicazioni supportate con minimizzazione, consenso ed esclusioni.
 - Gestire idle, lock, sleep, shutdown, processi inaccessibili e buffering limitato.
-- Misurare CPU, memoria, wakeup e crescita del database su sistemi Windows rappresentativi.
+- Introdurre metriche locali privacy-safe e demandare il profiling esteso a Sprint 02B.
+
+## Sprint 02B — documenti e hardening
+
+- Rilevare file/documenti per le applicazioni esplicitamente supportate, distinguendo percorso completo, solo nome e unresolved.
+- Eseguire hardening, recovery e profiling esteso su sistemi Windows rappresentativi.
 
 ## Sprint 03 — browser e classificazione deterministica
 

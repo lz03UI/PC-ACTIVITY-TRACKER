@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using PcActivityTracker.Core.Domain;
+using PcActivityTracker.Core.Tracking;
 using PcActivityTracker.Data;
 using Xunit;
 
@@ -56,6 +57,35 @@ public sealed class SqliteIntegrationTests : IDisposable
     [Fact] public async Task FailedMigrationRollsBackAtomically() { var migrations = new[] { new SqliteMigration(1, "CREATE TABLE stable(id INTEGER);"), new SqliteMigration(2, "CREATE TABLE partial(id INTEGER); INVALID SQL;") }; var db = new SqliteDatabase(path, migrations); await Assert.ThrowsAsync<SqliteException>(() => db.InitializeAsync()); await using var connection = Open(); Assert.DoesNotContain("partial", await Strings(connection, "SELECT name FROM sqlite_master WHERE type='table';")); await using var command = connection.CreateCommand(); command.CommandText = "SELECT version FROM schema_info;"; Assert.Equal(1L, await command.ExecuteScalarAsync()); }
     [Fact] public async Task InterruptedTransactionLeavesNoPartialRows() { await Create(); await using (var connection = Open()) { await using var transaction = await connection.BeginTransactionAsync(); await using var command = connection.CreateCommand(); command.Transaction = (SqliteTransaction)transaction; command.CommandText = "INSERT INTO categories VALUES('one','one'); INSERT INTO categories VALUES('two','two');"; await command.ExecuteNonQueryAsync(); await transaction.RollbackAsync(); } await using var reopened = Open(); await using var count = reopened.CreateCommand(); count.CommandText = "SELECT count(*) FROM categories;"; Assert.Equal(0L, await count.ExecuteScalarAsync()); }
 
+    [Fact]
+    public async Task RuntimePipelinePersistsObservationIntervalAndPausedGap()
+    {
+        var database = await Create(); var store = new SqliteActivityStore(database); var foreground = new FixedForeground(new(42, "editor"));
+        var machine = new TrackingStateMachine(new RuleExclusionEvaluator([]), () => new("UTC", TimeSpan.Zero)); var coordinator = new TrackingCoordinator(machine, store, foreground);
+        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Start, 0));
+        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Pause, 10));
+        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Resume, 20));
+        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Stop, 30));
+        var period = new TimeRange(Now, new(Now.Value.AddMinutes(1)));
+        Assert.Equal(2, (await store.GetObservationsAsync(period)).Count);
+        Assert.Equal(2, (await store.GetActivityIntervalsAsync(period)).Count);
+        Assert.Equal(ActivityState.Paused, Assert.Single(await store.GetActivityGapsAsync(period)).State);
+    }
+    [Fact]
+    public async Task RuntimePipelineNeverPersistsPrivateObservation()
+    {
+        var database = await Create(); var store = new SqliteActivityStore(database); var foreground = new FixedForeground(new(42, "editor"));
+        var coordinator = new TrackingCoordinator(new(new RuleExclusionEvaluator([]), () => new("UTC", TimeSpan.Zero)), store, foreground);
+        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Start, 0)); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.EnterPrivate, 1));
+        foreground.Value = new(99, "secret"); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.ForegroundChanged, 2, foreground.Value));
+        foreground.Value = new(42, "editor"); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.ExitPrivate, 3)); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Stop, 4));
+        var observations = await store.GetObservationsAsync(new(Now, new(Now.Value.AddMinutes(1))));
+        Assert.DoesNotContain(observations, x => x.Application.ProcessName == "secret");
+        Assert.Equal(ActivityState.Private, Assert.Single(await store.GetActivityGapsAsync(new(Now, new(Now.Value.AddMinutes(1))))).State);
+    }
+
+    private static TrackingSignal RuntimeSignal(TrackingSignalKind kind, int seconds, ForegroundSnapshot? foreground = null) => new(kind, new(Now.Value.AddSeconds(seconds)), new(seconds), foreground);
+    private sealed class FixedForeground(ForegroundSnapshot? value) : IForegroundSnapshotProvider { public ForegroundSnapshot? Value { get; set; } = value; public ValueTask<ForegroundSnapshot?> GetCurrentAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Value); }
     private async Task<SqliteDatabase> Create() { var db = new SqliteDatabase(path); await db.InitializeAsync(); return db; }
     private SqliteConnection Open() { var c = new SqliteConnection($"Data Source={path}"); c.Open(); return c; }
     private static RawObservation Observation(UtcInstant? at = null) => new(ObservationId.New(), ObservationSource.ForegroundApplication, at ?? Now, new("Europe/Rome", TimeSpan.FromHours(2)), ActivityState.Active, new("editor", "/opt/editor"));
