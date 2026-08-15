@@ -96,6 +96,14 @@ Le esclusioni vengono caricate prima dell'avvio del collector e valutate prima d
 
 `RuntimeMetrics` e `LocalResourceSnapshot` forniscono contatori locali non identificativi (segnali, drop, riconciliazioni, scritture, CPU cumulativa, working set e dimensione DB). Nessuna metrica viene trasmessa in rete.
 
+### Correzioni runtime post-review
+
+La sorgente espone ora un unico `IAsyncEnumerable<TrackingSignal>` consumato sequenzialmente dal coordinator: non esistono subscriber `async void` nel data path. Foreground, idle, lifecycle, perdita segnali e reconciliation condividono una sequenza producer-side e una capacità bounded; reconciliation, signal-loss e un controllo lifecycle/idle in overflow hanno ciascuno un solo slot coalescente aggiuntivo. Il callback foreground acquisisce soltanto HWND, UTC, monotonic, generation e sequence. Se la coda è piena incrementa il drop counter, imposta atomicamente `SignalLossDetected` e ritorna; la risoluzione processo avviene durante la lettura awaitable.
+
+La reconciliation è una barriera ordinata: incrementa la generation sotto lo stesso lock minimale usato dal callback, cattura HWND e timestamp e viene consumata secondo sequence. Gli eventi foreground antecedenti vengono invalidati; lifecycle antecedenti conservano il proprio ordine. La priorità effettiva centralizzata è `Suspended > Locked/Disconnected > Idle > Paused > Private`. Entrare in Private da Paused è consentito, ma ExitPrivate ripristina Paused.
+
+`ITrackingBatchStore` è la porta Core orientata al caso d'uso. Data persiste tutti gli effetti di un segnale in una singola transazione SQLite. Il coordinator conserva uno snapshot della macchina: se il batch fallisce, ripristina lo snapshot, passa a `Faulted`, arresta la sorgente e non consuma altri segnali. Un nuovo Start esplicito effettua restart e reconciliation. Le exclusion `WindowTitle` e `FilePath` sono disabilitate in 02A: il collector non acquisisce titoli e i resolver documento restano in 02B.
+
 ## Fondazione Sprint 01
 
 Il dominio rappresenta istanti UTC, contesto locale (identificativo del fuso e offset osservato), intervalli semiaperti, stato active/idle/locked/suspended/paused/private e discontinuità di clock. Il timestamp monotonic è un valore distinto dal wall clock: i collector futuri lo useranno per misurare il tempo trascorso, senza persisterlo come istante civile.

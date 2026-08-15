@@ -60,12 +60,10 @@ public sealed class SqliteIntegrationTests : IDisposable
     [Fact]
     public async Task RuntimePipelinePersistsObservationIntervalAndPausedGap()
     {
-        var database = await Create(); var store = new SqliteActivityStore(database); var foreground = new FixedForeground(new(42, "editor"));
-        var machine = new TrackingStateMachine(new RuleExclusionEvaluator([]), () => new("UTC", TimeSpan.Zero)); var coordinator = new TrackingCoordinator(machine, store, foreground);
-        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Start, 0));
-        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Pause, 10));
-        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Resume, 20));
-        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Stop, 30));
+        var database = await Create(); var store = new SqliteActivityStore(database);
+        var source = new QueuedSource([RuntimeSignal(TrackingSignalKind.Start, 0), RuntimeSignal(TrackingSignalKind.Pause, 10), RuntimeSignal(TrackingSignalKind.Resume, 20), RuntimeSignal(TrackingSignalKind.Stop, 30)], new(42, "editor"));
+        var machine = new TrackingStateMachine(new RuleExclusionEvaluator([]), () => new("UTC", TimeSpan.Zero)); var coordinator = new TrackingCoordinator(machine, store, source);
+        await coordinator.RunAsync();
         var period = new TimeRange(Now, new(Now.Value.AddMinutes(1)));
         Assert.Equal(2, (await store.GetObservationsAsync(period)).Count);
         Assert.Equal(2, (await store.GetActivityIntervalsAsync(period)).Count);
@@ -74,18 +72,35 @@ public sealed class SqliteIntegrationTests : IDisposable
     [Fact]
     public async Task RuntimePipelineNeverPersistsPrivateObservation()
     {
-        var database = await Create(); var store = new SqliteActivityStore(database); var foreground = new FixedForeground(new(42, "editor"));
-        var coordinator = new TrackingCoordinator(new(new RuleExclusionEvaluator([]), () => new("UTC", TimeSpan.Zero)), store, foreground);
-        await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Start, 0)); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.EnterPrivate, 1));
-        foreground.Value = new(99, "secret"); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.ForegroundChanged, 2, foreground.Value));
-        foreground.Value = new(42, "editor"); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.ExitPrivate, 3)); await coordinator.HandleAsync(RuntimeSignal(TrackingSignalKind.Stop, 4));
+        var database = await Create(); var store = new SqliteActivityStore(database);
+        var source = new QueuedSource([RuntimeSignal(TrackingSignalKind.Start, 0), RuntimeSignal(TrackingSignalKind.EnterPrivate, 1), RuntimeSignal(TrackingSignalKind.ForegroundChanged, 2, new(99, "secret")), RuntimeSignal(TrackingSignalKind.ExitPrivate, 3), RuntimeSignal(TrackingSignalKind.Stop, 4)], new(42, "editor"));
+        var coordinator = new TrackingCoordinator(new(new RuleExclusionEvaluator([]), () => new("UTC", TimeSpan.Zero)), store, source);
+        await coordinator.RunAsync();
         var observations = await store.GetObservationsAsync(new(Now, new(Now.Value.AddMinutes(1))));
         Assert.DoesNotContain(observations, x => x.Application.ProcessName == "secret");
         Assert.Equal(ActivityState.Private, Assert.Single(await store.GetActivityGapsAsync(new(Now, new(Now.Value.AddMinutes(1))))).State);
     }
+    [Fact]
+    public async Task TrackingBatchRollsBackAtomicallyWhenAnyWriteFails()
+    {
+        var database = await Create(); var store = new SqliteActivityStore(database); var observation = Observation();
+        var invalidInterval = new ActivityInterval(ActivityIntervalId.New(), ObservationId.New(), new(Now, new(Now.Value.AddSeconds(1))), ActivityState.Active);
+        await Assert.ThrowsAsync<SqliteException>(() => store.PersistTrackingBatchAsync(new([observation], [invalidInterval], [])));
+        Assert.Empty(await store.GetObservationsAsync(new(new(Now.Value.AddSeconds(-1)), new(Now.Value.AddSeconds(2)))));
+    }
 
     private static TrackingSignal RuntimeSignal(TrackingSignalKind kind, int seconds, ForegroundSnapshot? foreground = null) => new(kind, new(Now.Value.AddSeconds(seconds)), new(seconds), foreground);
-    private sealed class FixedForeground(ForegroundSnapshot? value) : IForegroundSnapshotProvider { public ForegroundSnapshot? Value { get; set; } = value; public ValueTask<ForegroundSnapshot?> GetCurrentAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Value); }
+    private sealed class QueuedSource(IEnumerable<TrackingSignal> signals, ForegroundSnapshot? foreground) : ITrackingSignalSource
+    {
+        private TrackingSignal current = RuntimeSignal(TrackingSignalKind.Start, 0);
+        private bool reconcile;
+        public async IAsyncEnumerable<TrackingSignal> ReadAllAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { foreach (var signal in signals) { cancellationToken.ThrowIfCancellationRequested(); current = signal; yield return signal; if (reconcile) { reconcile = false; yield return current with { Kind = TrackingSignalKind.Reconcile, Foreground = foreground }; } await Task.Yield(); } }
+        public bool TryPublish(TrackingSignalKind kind) => true;
+        public void RequestReconciliation() => reconcile = true;
+        public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
     private async Task<SqliteDatabase> Create() { var db = new SqliteDatabase(path); await db.InitializeAsync(); return db; }
     private SqliteConnection Open() { var c = new SqliteConnection($"Data Source={path}"); c.Open(); return c; }
     private static RawObservation Observation(UtcInstant? at = null) => new(ObservationId.New(), ObservationSource.ForegroundApplication, at ?? Now, new("Europe/Rome", TimeSpan.FromHours(2)), ActivityState.Active, new("editor", "/opt/editor"));

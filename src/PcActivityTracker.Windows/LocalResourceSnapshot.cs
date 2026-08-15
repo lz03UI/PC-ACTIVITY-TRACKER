@@ -8,7 +8,8 @@ public sealed record LocalResourceSnapshot(TimeSpan TotalProcessorTime, long Wor
     public static LocalResourceSnapshot Capture(string databasePath)
     {
         using var process = Process.GetCurrentProcess();
-        var databaseBytes = File.Exists(databasePath) ? new FileInfo(databasePath).Length : 0;
+        var databaseBytes = Size(databasePath) + Size(databasePath + "-wal");
         return new(process.TotalProcessorTime, process.WorkingSet64, databaseBytes);
     }
+    private static long Size(string path) => File.Exists(path) ? new FileInfo(path).Length : 0;
 }

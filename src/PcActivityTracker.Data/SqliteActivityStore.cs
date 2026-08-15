@@ -5,7 +5,7 @@ using PcActivityTracker.Core.Persistence;
 
 namespace PcActivityTracker.Data;
 
-public sealed class SqliteActivityStore(SqliteDatabase database) : IObservationStore, IClassificationStore, IPrivacyStore, IWorkTaxonomyStore, IRetentionStore
+public sealed class SqliteActivityStore(SqliteDatabase database) : IObservationStore, ITrackingBatchStore, IClassificationStore, IPrivacyStore, IWorkTaxonomyStore, IRetentionStore
 {
     private const string TimestampFormat = "O";
 
@@ -14,6 +14,33 @@ public sealed class SqliteActivityStore(SqliteDatabase database) : IObservationS
         if (value.State == ActivityState.Private) throw new ArgumentException("Le osservazioni private non possono essere persistite.", nameof(value));
         const string sql = """INSERT INTO observations(id,source,observed_at_utc,time_zone_id,observed_offset_minutes,state,process_name,executable_path,file_path,document_type,browser_domain,browser_path) VALUES($id,$source,$at,$zone,$offset,$state,$process,$exe,$file,$document,$domain,$path);""";
         await ExecuteAsync(sql, command => { Add(command, "$id", value.Id.Value); Add(command, "$source", (int)value.Source); Add(command, "$at", Format(value.ObservedAt)); Add(command, "$zone", value.LocalTime.TimeZoneId); Add(command, "$offset", (int)value.LocalTime.ObservedUtcOffset.TotalMinutes); Add(command, "$state", (int)value.State); Add(command, "$process", value.Application.ProcessName); Add(command, "$exe", value.Application.ExecutablePath); Add(command, "$file", value.File?.Path); Add(command, "$document", value.File?.DocumentType); Add(command, "$domain", value.Browser?.Domain); Add(command, "$path", value.Browser?.Path); }, cancellationToken);
+    }
+
+    public async Task PersistTrackingBatchAsync(TrackingPersistenceBatch batch, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        if (batch.Observations.Any(x => x.State == ActivityState.Private)) throw new ArgumentException("Le osservazioni private non possono essere persistite.", nameof(batch));
+        await using var connection = await database.OpenConnectionAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            foreach (var value in batch.Observations)
+                await ExecuteTrackingAsync(connection, transaction,
+                    "INSERT INTO observations(id,source,observed_at_utc,time_zone_id,observed_offset_minutes,state,process_name,executable_path,file_path,document_type,browser_domain,browser_path) VALUES($id,$source,$at,$zone,$offset,$state,$process,$exe,$file,$document,$domain,$path);",
+                    command => { Add(command, "$id", value.Id.Value); Add(command, "$source", (int)value.Source); Add(command, "$at", Format(value.ObservedAt)); Add(command, "$zone", value.LocalTime.TimeZoneId); Add(command, "$offset", (int)value.LocalTime.ObservedUtcOffset.TotalMinutes); Add(command, "$state", (int)value.State); Add(command, "$process", value.Application.ProcessName); Add(command, "$exe", value.Application.ExecutablePath); Add(command, "$file", value.File?.Path); Add(command, "$document", value.File?.DocumentType); Add(command, "$domain", value.Browser?.Domain); Add(command, "$path", value.Browser?.Path); }, cancellationToken);
+            foreach (var value in batch.Intervals)
+                await ExecuteTrackingAsync(connection, transaction, "INSERT INTO activity_intervals VALUES($id,$observation,$start,$end,$state,$reason);",
+                    command => { Add(command, "$id", value.Id.Value); Add(command, "$observation", value.ObservationId?.Value); Add(command, "$start", Format(value.Period.Start)); Add(command, "$end", Format(value.Period.End)); Add(command, "$state", (int)value.State); Add(command, "$reason", (int)value.EndReason); }, cancellationToken);
+            foreach (var value in batch.Gaps)
+                await ExecuteTrackingAsync(connection, transaction, "INSERT INTO activity_gaps VALUES($id,$start,$end,$state);",
+                    command => { Add(command, "$id", value.Id.Value); Add(command, "$start", Format(value.Period.Start)); Add(command, "$end", Format(value.Period.End)); Add(command, "$state", (int)value.State); }, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<RawObservation>> GetObservationsAsync(TimeRange period, CancellationToken cancellationToken = default)
@@ -52,6 +79,7 @@ public sealed class SqliteActivityStore(SqliteDatabase database) : IObservationS
 
     private async Task UpsertName(string table, Guid id, string name, Guid? projectId, CancellationToken token) => await ExecuteAsync(projectId is null ? $"INSERT INTO {table}(id,name) VALUES($id,$name) ON CONFLICT(id) DO UPDATE SET name=excluded.name;" : $"INSERT INTO {table}(id,project_id,name) VALUES($id,$project,$name) ON CONFLICT(id) DO UPDATE SET project_id=excluded.project_id,name=excluded.name;", c => { Add(c, "$id", id); Add(c, "$name", name); if (projectId is not null) Add(c, "$project", projectId); }, token);
     private async Task<int> ExecuteAsync(string sql, Action<SqliteCommand> bind, CancellationToken token) { await using var connection = await database.OpenConnectionAsync(token); await using var command = connection.CreateCommand(); command.CommandText = sql; bind(command); return await command.ExecuteNonQueryAsync(token); }
+    private static async Task ExecuteTrackingAsync(SqliteConnection connection, SqliteTransaction transaction, string sql, Action<SqliteCommand> bind, CancellationToken token) { await using var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = sql; bind(command); await command.ExecuteNonQueryAsync(token); }
     private static async Task<int> ExecuteAsync(SqliteConnection connection, SqliteTransaction transaction, string sql, string cutoff, CancellationToken token) { await using var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = sql; Add(command, "$cutoff", cutoff); return await command.ExecuteNonQueryAsync(token); }
     private async Task<IReadOnlyList<T>> QueryAsync<T>(string sql, Action<SqliteCommand> bind, Func<SqliteDataReader, T> map, CancellationToken token) { var result = new List<T>(); await using var connection = await database.OpenConnectionAsync(token); await using var command = connection.CreateCommand(); command.CommandText = sql; bind(command); await using var reader = await command.ExecuteReaderAsync(token); while (await reader.ReadAsync(token)) result.Add(map(reader)); return result; }
     private static void Add(SqliteCommand c, string name, object? value) => c.Parameters.AddWithValue(name, value ?? DBNull.Value);

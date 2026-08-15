@@ -11,6 +11,18 @@ public interface IObservationStore
     Task AddActivityGapAsync(ActivityGap gap, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ActivityGap>> GetActivityGapsAsync(TimeRange period, CancellationToken cancellationToken = default);
 }
+public sealed record TrackingPersistenceBatch(
+    IReadOnlyList<RawObservation> Observations,
+    IReadOnlyList<ActivityInterval> Intervals,
+    IReadOnlyList<ActivityGap> Gaps)
+{
+    public int Count => Observations.Count + Intervals.Count + Gaps.Count;
+    public bool IsEmpty => Count == 0;
+}
+public interface ITrackingBatchStore
+{
+    Task PersistTrackingBatchAsync(TrackingPersistenceBatch batch, CancellationToken cancellationToken = default);
+}
 public interface IClassificationStore
 {
     Task AddClassificationAsync(Classification classification, CancellationToken cancellationToken = default);

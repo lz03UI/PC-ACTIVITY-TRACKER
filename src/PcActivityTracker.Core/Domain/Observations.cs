@@ -2,7 +2,7 @@ namespace PcActivityTracker.Core.Domain;
 
 public enum ObservationSource { ForegroundApplication, FileDocument, Browser }
 public enum ActivityState { Active, Idle, Locked, Suspended, Paused, Private }
-public enum DiscontinuityReason { None, ClockChanged, TimeZoneChanged, Sleep, Lock, CollectorRestart }
+public enum DiscontinuityReason { None, ClockChanged, TimeZoneChanged, Sleep, Lock, CollectorRestart, SignalLoss }
 
 public sealed record ApplicationIdentity
 {
