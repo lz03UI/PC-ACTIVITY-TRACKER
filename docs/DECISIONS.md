@@ -59,3 +59,34 @@ Decisions are append-only. Supersede an entry rather than silently rewriting its
 - Dependency injection, logging, and configuration libraries.
 - Packaging, signing, update, and release channels.
 
+> Le prime due decisioni aperte sopra sono risolte dagli ADR-0008, ADR-0009 e ADR-0010. La cronologia è mantenuta senza riscrivere le voci precedenti.
+
+## ADR-0008: Semantica temporale UTC e intervalli semiaperti
+
+- **Stato:** Accepted
+- **Decisione:** Persistiamo ogni istante come `DateTimeOffset` a offset zero e ogni intervallo come `[start, end)`, con `end >= start`. Conserviamo accanto all'osservazione l'identificativo del fuso e l'offset effettivamente osservato. Wall clock e timestamp monotonic sono tipi distinti; `TimeProvider` è il confine testabile per l'ora corrente. Lock, sleep, cambi del clock/fuso e restart chiudono un intervallo con una causa esplicita.
+- **Perché:** UTC rende ordinamento e durata non ambigui; zona più offset ricostruiscono correttamente la vista locale anche attraverso DST o cambio fuso. Il clock monotonic protegge il calcolo futuro da salti dell'orologio civile.
+- **Conseguenze:** I collector futuri non devono calcolare durate da due letture wall-clock quando è disponibile il clock monotonic. Gli intervalli adiacenti non si sovrappongono e non esistono durate negative. Il monotonic non è convertibile in un istante UTC e non viene usato come tale.
+
+## ADR-0009: Evidenza grezza immutabile e classificazione separata
+
+- **Stato:** Accepted
+- **Decisione:** `RawObservation` è un valore immutabile append-only; in SQLite un trigger ne vieta gli update. Correzioni, inferenze e suggerimenti sono nuove righe `classifications`, con target, timestamp, motivazione, rule id opzionale e provenance `manual`, `deterministic rule`, `system/inferred` o `AI suggestion`. Un suggerimento AI non è autorevole.
+- **Perché:** Separare evidenza e interpretazione rende correzioni verificabili, impedisce riclassificazioni silenziose e mantiene il core offline e deterministico.
+- **Conseguenze:** Più classificazioni possono riferirsi allo stesso target e una vista futura dovrà scegliere quella efficace secondo policy esplicita. La cancellazione retention dell'evidenza non equivale a una sua modifica. I collector devono applicare esclusioni e minimizzazione prima di costruire/persistire l'osservazione; incognito e query/fragment non sono accettati dal modello browser.
+
+## ADR-0010: SQLite con migrazioni SQL esplicite
+
+- **Stato:** Accepted
+- **Decisione:** Usiamo `Microsoft.Data.Sqlite` e una sequenza ordinata di script SQL numerati, ciascuno applicato insieme all'aggiornamento di `schema_info` in una singola transazione. Non introduciamo EF Core o un migration framework. Ogni connessione abilita foreign key, WAL, synchronous NORMAL e busy timeout.
+- **Perché:** SQL esplicito ha overhead e superficie dipendenze minimi, rende schema e vincoli revisionabili e consente integration test reali su Linux.
+- **Conseguenze:** Le migrazioni devono essere additive, deterministiche, senza buchi e testate sia nel percorso da una versione precedente sia nel rollback. Le modifiche future aggiungono una nuova migrazione invece di alterare quella pubblicata. Backup/ripristino, recovery da corruzione, compattazione e benchmark dei batch saranno decisi prima dell'uso di produzione dei collector.
+
+## ADR-0011: Difese privacy, retention esatta e progetto derivato dalla commessa
+
+- **Stato:** Accepted
+- **Decisione privacy:** Private/incognito viene scartato prima di creare una `RawObservation`. Dominio, adapter SQLite e vincolo dello schema rifiutano inoltre ogni osservazione privata. La sola rappresentazione persistibile del periodo è un `ActivityGap` contenente esclusivamente intervallo e stato; un `ActivityInterval` identificativo non può essere private.
+- **Decisione retention:** `DeleteActivityBeforeAsync(cutoff)` opera in una transazione, elimina intervalli/gap interamente antecedenti (`end <= cutoff`), tronca a cutoff quelli attraversanti e conserva quelli successivi. Le osservazioni antecedenti vengono eliminate dopo il trattamento degli intervalli; gli intervalli sopravvissuti perdono il riferimento all'evidenza tramite `ON DELETE SET NULL`. Le classificazioni di observation/interval eliminati vengono cancellate dai trigger.
+- **Decisione tassonomia:** Una classificazione contiene `project_id` oppure `job_id`, mai entrambi. Con `job_id`, il progetto è derivato dalla relazione corrente della commessa. Lo spostamento futuro di una commessa tra progetti si riflette quindi sulle classificazioni senza coppie duplicate potenzialmente contraddittorie. Dominio e database rifiutano gli identificativi vuoti della tassonomia.
+- **Perché:** Le difese in profondità impediscono persistenza accidentale di contenuti privati; la retention esatta non perde tempo successivo al cutoff; una sola fonte per la relazione job/progetto elimina stati incoerenti e definisce il comportamento dei successivi spostamenti.
+- **Conseguenze:** Gli intervalli conservati dopo la rimozione dell'evidenza possono avere `ObservationId` nullo. I consumer devono trattarli come tempo valido senza metadati identificativi. Poiché lo schema Sprint 01 non è ancora confluito in `main`, queste correzioni sono incorporate nella migration v1 prima della sua pubblicazione anziché introdurre una migration correttiva v2.

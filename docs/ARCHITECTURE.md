@@ -26,7 +26,7 @@ Domain values, deterministic policies, use-case-neutral interfaces, and time abs
 
 ### Data
 
-SQLite connection, migrations, repositories, transactions, and retention implementation. It remains cross-platform so schema and repository behavior can be tested on Linux using temporary databases. A schema will be designed in a later sprint.
+SQLite connection, migrations, repositories, transactions, and retention implementation. It remains cross-platform so schema and repository behavior can be tested on Linux using temporary databases. Da Sprint 01 espone adapter orientati ai casi d'uso per osservazioni, intervalli, classificazioni, privacy e tassonomia; il Core contiene solo le relative porte e non conosce SQLite.
 
 ### Reporting
 
@@ -86,3 +86,19 @@ Use OS event hooks rather than rapid polling; bounded channels and backpressure;
 
 Collectors must tolerate inaccessible processes and malformed external data. Failures are contained at adapters, queues are bounded, persistence is transactional, and cancellation is honored. Do not use broad exception swallowing; surface privacy-safe diagnostics and degraded state to the user.
 
+## Fondazione Sprint 01
+
+Il dominio rappresenta istanti UTC, contesto locale (identificativo del fuso e offset osservato), intervalli semiaperti, stato active/idle/locked/suspended/paused/private e discontinuità di clock. Il timestamp monotonic è un valore distinto dal wall clock: i collector futuri lo useranno per misurare il tempo trascorso, senza persisterlo come istante civile.
+
+Le `RawObservation` sono append-only e contengono solo contesti minimizzati di applicazione, file o browser. Lo stato private/incognito non è ammesso nelle osservazioni né negli intervalli identificativi: deve essere filtrato prima della creazione del dominio e la persistence applica una seconda difesa. Un periodo privato può essere conservato soltanto come `ActivityGap`, composto da intervallo e stato e privo di riferimenti ad applicazione, processo, file, browser o osservazione. Le classificazioni sono record separati e conservano target, provenance, regola opzionale, motivazione e timestamp. Le esclusioni sono leggibili prima dell'ingestione affinché gli adapter possano scartare dati sensibili prima della persistenza. Contenuti digitati, clipboard, form data e screenshot non hanno alcuna rappresentazione persistibile.
+
+`PcActivityTracker.Data` usa un database SQLite locale con foreign key per connessione, WAL, synchronous NORMAL, busy timeout di 5 secondi e migrazioni SQL esplicite. Lo schema v1 comprende:
+
+- `schema_info` per la versione;
+- `observations`, `activity_intervals` e `activity_gaps`, indicizzati temporalmente;
+- `classifications`, con indici su target, progetto, commessa e categoria;
+- `projects`, `jobs`, `categories` ed `exclusions`.
+
+La retention ha semantica temporale esatta: elimina intervalli e gap con `end <= cutoff`, tronca a `cutoff` quelli che lo attraversano e lascia invariati quelli successivi. Le osservazioni antecedenti vengono poi eliminate; un intervallo sopravvissuto viene scollegato dall'evidenza rimossa tramite `ON DELETE SET NULL`, senza perdere attività successiva al cutoff. I trigger eliminano le classificazioni dei target effettivamente cancellati. Il trigger `observations_immutable` impedisce l'aggiornamento delle osservazioni grezze; la cancellazione resta consentita per retention e diritto dell'utente alla rimozione.
+
+Una classificazione associa direttamente un progetto oppure una commessa, mai entrambi. Quando è presente la commessa, il progetto è derivato dalla relazione corrente `jobs.project_id`; spostare una commessa aggiorna quindi coerentemente l'appartenenza delle classificazioni che la usano. Sono rinviati a sprint successivi batching misurato, backup/ripristino, motore di regole, sessionizzazione derivata, ricerca full-text ed eventuale cifratura at-rest: nessuno di questi rinvii introduce rete o cloud.
