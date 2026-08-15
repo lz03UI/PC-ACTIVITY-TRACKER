@@ -11,7 +11,8 @@ public enum TrackingSignalKind
     ConditionsChanged, SignalLossDetected, CollectorRestarted, ClockChanged, TimeZoneChanged
 }
 
-public sealed record ForegroundSnapshot(int ProcessId, string ProcessName, string? ExecutablePath = null);
+public sealed record ForegroundSnapshot(int ProcessId, string ProcessName, string? ExecutablePath = null,
+    DocumentResolutionResult? Document = null);
 public sealed record RuntimeConditions(bool Idle, bool Locked, bool Disconnected, bool Suspended);
 public sealed record TrackingSignal(TrackingSignalKind Kind, UtcInstant At, MonotonicTimestamp Monotonic, ForegroundSnapshot? Foreground = null,
     long Sequence = 0, long MonotonicFrequency = 1, RuntimeConditions? Conditions = null);
@@ -39,12 +40,13 @@ public sealed class RuntimeMetrics
     public void SignalDropped() => Interlocked.Increment(ref dropped);
 }
 
-/// <summary>In 02A sono supportate solo esclusioni applicazione; titolo finestra e percorsi documento sono rinviati.</summary>
 public sealed class RuleExclusionEvaluator(IEnumerable<ExclusionRule> rules) : IExclusionEvaluator
 {
     private readonly ExclusionRule[] applicationRules = rules.Where(x => x.IsEnabled && x.Kind == ExclusionKind.Application).ToArray();
+    private readonly ExclusionRule[] filePathRules = rules.Where(x => x.IsEnabled && x.Kind == ExclusionKind.FilePath).ToArray();
     public bool IsExcluded(ForegroundSnapshot value) => applicationRules.Any(rule =>
-        rule.Matches(value.ProcessName) || (value.ExecutablePath is { } path && rule.Matches(path)));
+        rule.Matches(value.ProcessName) || (value.ExecutablePath is { } path && rule.Matches(path))) ||
+        value.Document is { Precision: DocumentResolutionPrecision.FullPath, Value: { } documentPath } && filePathRules.Any(rule => rule.Matches(documentPath));
 }
 
 public abstract record TrackingEffect;
@@ -176,13 +178,17 @@ public sealed class TrackingStateMachine(IExclusionEvaluator exclusions, Func<Lo
         if (activity is { } current && IsSameApplication(current.Snapshot, snapshot)) return;
         CloseActivity(signal, effects);
         var id = ObservationId.New();
-        var observation = new RawObservation(id, ObservationSource.ForegroundApplication, signal.At, localTime(), ActivityState.Active, new(snapshot.ProcessName, snapshot.ExecutablePath));
+        var document = snapshot.Document is { Precision: not DocumentResolutionPrecision.Unresolved, Value: { } value } result
+            ? new FileContext(value, Precision: result.Precision, Provenance: result.Provenance) : null;
+        var source = document is null ? ObservationSource.ForegroundApplication : ObservationSource.FileDocument;
+        var observation = new RawObservation(id, source, signal.At, localTime(), ActivityState.Active,
+            new(snapshot.ProcessName, snapshot.ExecutablePath), document);
         activity = new(id, snapshot, signal.At, signal.Monotonic, signal.MonotonicFrequency);
         effects.Add(new ObservationAccepted(observation));
     }
     private static bool IsSameApplication(ForegroundSnapshot left, ForegroundSnapshot right) =>
         left.ProcessId == right.ProcessId && string.Equals(left.ProcessName, right.ProcessName, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(left.ExecutablePath, right.ExecutablePath, StringComparison.OrdinalIgnoreCase);
+        string.Equals(left.ExecutablePath, right.ExecutablePath, StringComparison.OrdinalIgnoreCase) && left.Document == right.Document;
     private void CloseActivity(TrackingSignal signal, List<TrackingEffect> effects, DiscontinuityReason reason = DiscontinuityReason.None)
     {
         if (activity is not { } open) return;

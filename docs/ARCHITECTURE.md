@@ -86,6 +86,16 @@ Use OS event hooks rather than rapid polling; bounded channels and backpressure;
 
 Collectors must tolerate inaccessible processes and malformed external data. Failures are contained at adapters, queues are bounded, persistence is transactional, and cancellation is honored. Do not use broad exception swallowing; surface privacy-safe diagnostics and degraded state to the user.
 
+## Resolver documentali Sprint 02B
+
+Il Core rappresenta la risoluzione con stati tipizzati `FullPath`, `FileNameOnly` e `Unresolved`, provenance `DirectlyObserved`, `Derived` o `Unresolved` e una causa degradata non identificativa. Il contratto operativo `IDocumentContextResolver`, il registry per executable normalizzato, i timeout e gli adapter applicativi restano in `PcActivityTracker.Windows`; nessun resolver conosce SQLite o WinUI.
+
+La risoluzione avviene nel consumer dopo la lettura dei metadata foreground, mai nel callback WinEvent. Un gate dedicato a ciascuna istanza resolver limita a uno il relativo lavoro isolato. Il gate viene acquisito prima di creare il task: allo scadere del timeout il collector prosegue e richieste accodate non producono work item illimitati. Un resolver bloccato non occupa i gate degli altri. I contatori registrano soltanto tentativi, precisione, timeout, errori e latenza aggregata. Un `FullPath` attraversa la valutazione `FilePath` prima di creare la `RawObservation`; `FileNameOnly` non viene trasformato in un percorso inventato. La migration v3 conserva precisione e provenance insieme al riferimento file.
+
+Il primo adapter reale è Microsoft Word via Word Object Model/COM. Legge esclusivamente `ActiveWindow.Hwnd`, `ActiveDocument.FullName` e `ActiveDocument.Name`; verifica che la finestra Word attiva coincida con quella foreground. Non legge contenuto né usa il titolo finestra. Richiede la stessa sessione desktop e un livello di integrità compatibile con Word; COM/RPC indisponibile, documento assente, mismatch finestra, access denied o processo terminato convergono a un risultato degradato privacy-safe.
+
+Il secondo adapter è Microsoft Excel via Excel Object Model/COM. Verifica PID/HWND della snapshot foreground e uguaglianza con `Application.Hwnd`, quindi legge esclusivamente `ActiveWorkbook.FullName` e `Name`. Un mismatch (inclusa l'istanza diversa restituita dalla ROT) è ambiguo e produce `Unresolved`; non usa titoli, UI Automation, polling, add-in o contenuto del workbook.
+
 ## Runtime Sprint 02A
 
 L'orchestrazione resta nel Core perché è ancora una singola state machine coesa, senza giustificare un progetto `Application`. `TrackingStateMachine` riduce segnali sintetici ordinati dal timestamp monotonic e produce effetti di persistenza; `TrackingCoordinator` materializza tali effetti esclusivamente attraverso `IObservationStore`. Gli stati operativi sono `Stopped`, `Running`, `Paused` e `Private`; idle, lock e suspend sono condizioni sovrapposte che chiudono l'attività identificativa e aprono gap anonimi. Ogni uscita da una condizione di soppressione richiede una nuova snapshot foreground.
