@@ -1,71 +1,76 @@
 # Stato del progetto
 
 **Aggiornato:** 2026-08-15
-**Fase:** Sprint 02A — collector Windows runtime (implementato, in validazione CI)
+**Fase:** Sprint 02B — documenti e hardening (avviato)
 
 ## Baseline completata
 
-- Sprint 00 e Sprint 01 sono completati e confluiti in `main`.
+- Sprint 00, Sprint 01 e Sprint 02A sono completati e confluiti in `main`.
 - Sprint 01 è stato integrato con commit `c717ffb291d465888c6ae057d7c7c3c762e93702`.
-- La baseline Sprint 01 comprende 50 test e la CI post-merge è verde su Linux e Windows.
+- Sprint 02A è confluito tramite PR #3; la CI finale è verde sia nel job cross-platform sia nel job Windows completo con Visual Studio MSBuild.
+- La baseline corrente comprende 110 test: 60 Core, 25 Data integration, 8 architecture e 17 adapter Windows.
 
 ## Completato in Sprint 02A
 
 - Implementata la state machine deterministica platform-neutral per start, foreground, idle, lock/disconnect, suspend, pause, private, resume, stop, signal-loss, restart, discontinuità, duplicati e segnali stale, con priorità effettiva centralizzata.
-- Implementato il collector foreground Windows event-driven con ingestion realmente bounded e un solo consumer awaitable, timestamp producer-side, reconciliation barrier, risoluzione processo tollerante agli accessi negati e idle configurabile (default cinque minuti).
+- Implementato il collector foreground Windows event-driven con ingestion realmente bounded e un solo consumer awaitable, timestamp producer-side, reconciliation barrier, risoluzione processo tollerante agli accessi negati e idle configurabile.
 - Integrati messaggi WTS, power e shutdown/logoff best-effort e controlli minimi WinUI con stato/degrado sempre visibile.
-- Applicate esclusioni Application prima della creazione di `RawObservation`; Private persiste esclusivamente gap anonimi. WindowTitle/FilePath sono esplicitamente rinviate e nessun titolo è acquisito. Nessun gap `Excluded` e nessun checkpoint sono stati introdotti.
+- Applicate esclusioni Application prima della creazione di `RawObservation`; Private persiste esclusivamente gap anonimi. Nessun titolo finestra general-purpose viene acquisito.
 - Gli effetti di ogni segnale sono persistiti atomicamente tramite `ITrackingBatchStore`; un errore porta il runtime in `Faulted`, arresta l'ingestione e impedisce riferimenti a observation non confermate.
 - Aggiunte metriche locali privacy-safe per segnali, drop, riconciliazioni, scritture, CPU, working set e crescita effettiva DB + WAL.
-- Aggiunta migration v2 additiva per conservare la durata monotonic-derived separatamente dagli estremi UTC civili; migration v1 non è stata modificata.
+- Aggiunta migration v2 additiva per conservare la durata monotonic-derived separatamente dagli estremi UTC civili.
 - Comandi user awaitable, ordering atomico dei producer, condizioni OS convergenti, segnali pre-Start non terminali e shutdown/time-zone filtering sono coperti dal runtime corretto.
-- Aggiunti 60 test rispetto alla baseline Sprint 01, portando il totale a 110 test: 60 Core, 25 Data integration, 8 architecture e 17 adapter Windows.
 
-## Completato in Sprint 01
+## Sprint 02B avviato
 
-- Implementato un dominio platform-neutral fortemente tipizzato per osservazioni, contesti applicazione/file/browser, stati, intervalli, discontinuità, classificazioni/provenance, esclusioni e tassonomia progetto/commessa/categoria.
-- Formalizzata la semantica UTC, `[start, end)`, fuso/offset osservato, wall clock rispetto a monotonic e accesso testabile al tempo con `TimeProvider`.
-- Definite nel Core porte di persistenza orientate ai casi d'uso; il Core non dipende da SQLite.
-- Implementato schema SQLite v1 locale con migrazioni SQL sequenziali atomiche, versione leggibile, foreign key, trigger d'immutabilità, indici, WAL, busy timeout e retention temporale transazionale.
-- Rafforzata la privacy: private/incognito non può diventare raw activity; un periodo privato è rappresentabile solo come gap temporale privo di contenuto identificativo.
-- La retention elimina i periodi precedenti, tronca quelli attraversanti il cutoff e conserva quelli successivi senza mantenere evidenza identificativa scaduta.
-- Una classificazione usa progetto o commessa; con la commessa, il progetto è derivato dalla sua relazione corrente. Gli ID della tassonomia sono validati nel dominio e nello schema.
-- Aggiunti 21 unit test di dominio e 21 integration test SQLite su file temporanei reali; restano inoltre verdi gli 8 test architetturali, per un totale di 50 test.
+Branch di lavoro: `sprint-02b/document-resolvers-hardening`.
 
-## Fuori scope e rinvii Sprint 01
+Obiettivi approvati:
 
-- Nessun collector Windows, tracking reale, browser extension, UI applicativa, motore completo di classificazione, report, AI, rete o cloud è stato introdotto.
-- Sessionizzazione derivata, batching profilato, backup/ripristino, recovery da corruzione e policy di scelta della classificazione efficace sono rinviati prima dei rispettivi flussi di produzione.
+- introdurre resolver documentali per applicazioni esplicitamente supportate;
+- distinguere `FullPath`, `FileNameOnly` e `Unresolved` con provenance esplicita;
+- attivare esclusioni `FilePath` solo quando il percorso osservato è realmente disponibile e prima della persistenza;
+- mantenere esclusi keylogging, clipboard capture, screenshot continui, content inspection e parsing indiscriminato dei titoli finestra;
+- hardening crash/restart, fault/recovery e process termination durante la risoluzione;
+- profiling prolungato su Windows reale per CPU, working set, wakeup, queue/drop/reconciliation, latenza resolver, SQLite e crescita DB/WAL;
+- validazione Windows reale di lock/unlock, RDP, suspend/resume, shutdown/logoff e cambi fuso/offset.
 
-- Vincoli di prodotto, confini architetturali, scope V1, roadmap e decision log sono documentati.
-- Sono presenti solution completa e cross-platform, sei progetti di produzione e tre progetti di test.
-- Una shell WinUI 3 minima e marker assembly neutrali stabiliscono i confini a compile time.
-- I test architetturali impediscono che dipendenze di piattaforma e persistenza entrino in Core.
-- La CI definisce validazione Linux cross-platform e build/test della solution completa su Windows.
-- La precedente CI Windows è diventata verde dopo il passaggio da `dotnet build` a Visual Studio MSBuild, che risolve correttamente i task PRI/AppX di WinUI.
-- La baseline è stata aggiornata a .NET 10 LTS e Microsoft.WindowsAppSDK 2.3.1 stabile, mantenendo Windows 10 1809 come versione minima di esecuzione e 19041 come Target Platform Version.
-- La CI post-upgrade della PR #1 è risultata verde sia nel job Linux cross-platform sia nel job Windows della solution completa; Sprint 00 è completato.
+La specifica esecutiva dello sprint è in `docs/SPRINT_02B.md`.
 
-## Intenzionalmente non implementato
+## Ordine di implementazione Sprint 02B
 
-Sprint 00 non implementa raccolta attività/file/browser, classificazione, schema SQLite di produzione, timeline, dashboard, ricerca, report, export, backup, AI o altre funzionalità applicative V1.
+1. Contratti neutralizzati per document context resolver e risultato tipizzato.
+2. Dispatcher/registry Windows e facade fake testabile.
+3. Primo resolver reale supportato con test Windows.
+4. Integrazione nel runtime e nella persistence esistente.
+5. Esclusioni `FilePath` pre-persistenza.
+6. Ulteriori resolver applicativi validati.
+7. Hardening crash/restart e failure mode.
+8. Profiling Windows e definizione budget risorse.
+9. Aggiornamento ADR/documentazione e PR.
+
+## Intenzionalmente non implementato in Sprint 02B
+
+- Browser tracking: Sprint 03.
+- Classificazione deterministica progetto/commessa/categoria: Sprint 03.
+- Timeline, dashboard e ricerca: Sprint 04.
+- Report, work-log, export e invio email: Sprint 05.
+- AI e cloud: fuori dalla V1 core e comunque opzionali.
 
 ## Stato della validazione
 
-- La seconda correzione Sprint 02A è stata verificata dalla CI run #10, verde su Linux e Windows.
-- Terza correzione: restore locked, format, build Release e 93 test cross-platform sono verdi in locale; build e 17 test dell'adapter Windows con facade fake sono verdi anche dal runner Linux, per 110 test totali. La nuova CI Windows è in attesa dopo la pubblicazione.
-- La build WinUI locale non è eseguibile su Linux perché `XamlCompiler.exe` richiede Windows/Visual Studio MSBuild. La solution completa, il launch reale, hook/window lifecycle interattivi e profiling su hardware fisico restano da validare su Windows.
-- I lock file NuGet sono rigenerati per .NET 10 e le dipendenze aggiornate.
-- La validazione cross-platform locale comprende restore bloccato, build, test e verifica del formato.
-- Launch WinUI, adapter OS, MSIX, accessibilità e profiling delle risorse richiedono Windows e non sono convalidabili nell'ambiente Linux locale.
-- La CI della baseline finale .NET 10 LTS / Windows App SDK 2.3.1 è verde su entrambi i job della PR #1: restore, formattazione, build e test cross-platform su Linux, oltre a restore, build della solution completa e test su Windows.
+- Baseline post-Sprint 02A: CI verde su Linux e Windows.
+- Build Windows completa WinUI validata in CI con Visual Studio MSBuild.
+- Restano da produrre in 02B misure su hardware Windows reale e test applicativi dei resolver documentali.
+- Ogni incremento 02B deve mantenere verdi i 110 test esistenti e aggiungere test per i nuovi failure mode senza indebolire i confini architetturali.
 
 ## Prossimo task sicuro
 
-Validare la solution completa nella CI Windows e poi avviare Sprint 02B con matrice esplicita dei resolver documentali, hardening crash/restart e profiling su hardware fisico.
+Implementare test-first i contratti del document resolver e il dispatcher Windows, senza ancora aggiungere browser tracking, dashboard o classificazione.
 
 ## Rischi noti
 
-- Le prove strutturali non dimostrano ancora fattibilità, affidabilità o consumo di risorse degli adapter Windows.
-- I requisiti privacy richiedono threat model e data-flow review prima che collector o integrazione browser persistano dati reali.
-- Formati export, modalità email e applicazioni/browser supportati richiedono decisioni implementative dedicate, senza modificare i vincoli local-first e offline del core.
+- Le applicazioni espongono il documento attivo con meccanismi diversi e non sempre affidabili; i resolver devono quindi essere espliciti, isolati e conservativi.
+- Un titolo finestra può essere ambiguo o contenere dati non destinati al tracking; non deve diventare una fonte general-purpose.
+- Il percorso completo è più sensibile del solo nome file: minimizzazione ed esclusioni devono essere applicate prima possibile.
+- Il profiling su runner CI non sostituisce la validazione di consumo e lifecycle su hardware Windows fisico.
