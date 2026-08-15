@@ -4,9 +4,23 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="PC Activity Tracker">
     <Grid Padding="32">
-        <StackPanel Spacing="12" VerticalAlignment="Center" HorizontalAlignment="Center">
+        <StackPanel Spacing="16" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="520">
             <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="PC Activity Tracker" />
-            <TextBlock Text="Repository foundation — tracking is not implemented." />
+            <TextBlock Text="Tracking locale e offline" HorizontalAlignment="Center" />
+            <Border Padding="20" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Stato attuale" />
+                    <TextBlock x:Name="StatusText" Text="Stopped" FontSize="28" FontWeight="SemiBold" AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock x:Name="HealthText" Text="Collector pronto" />
+                </StackPanel>
+            </Border>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="StartButton" Content="Start" Click="Start_Click" />
+                <Button x:Name="PauseButton" Content="Pause" Click="Pause_Click" IsEnabled="False" />
+                <Button x:Name="PrivateButton" Content="Private mode on" Click="Private_Click" IsEnabled="False" />
+                <Button x:Name="StopButton" Content="Stop" Click="Stop_Click" IsEnabled="False" />
+            </StackPanel>
+            <TextBlock Text="In Private mode non vengono create osservazioni o mostrati metadata dell'applicazione." TextWrapping="Wrap" />
         </StackPanel>
     </Grid>
 </Window>
