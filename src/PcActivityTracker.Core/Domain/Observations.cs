@@ -41,6 +41,7 @@ public sealed record RawObservation
         ActivityState state, ApplicationIdentity application, FileContext? file = null, BrowserContext? browser = null)
     {
         DomainId.EnsureAssigned(id, nameof(id));
+        if (state == ActivityState.Private) throw new ArgumentException("L'attività privata deve essere scartata prima di creare un'osservazione grezza.", nameof(state));
         if (source == ObservationSource.FileDocument && file is null) throw new ArgumentException("Il contesto file è richiesto.", nameof(file));
         if (source == ObservationSource.Browser && browser is null) throw new ArgumentException("Il contesto browser è richiesto.", nameof(browser));
         Id = id; Source = source; ObservedAt = observedAt; LocalTime = localTime; State = state;
@@ -58,15 +59,35 @@ public sealed record RawObservation
 
 public sealed record ActivityInterval
 {
-    public ActivityInterval(ActivityIntervalId id, ObservationId observationId, TimeRange period, ActivityState state,
+    public ActivityInterval(ActivityIntervalId id, ObservationId? observationId, TimeRange period, ActivityState state,
         DiscontinuityReason endReason = DiscontinuityReason.None)
     {
-        DomainId.EnsureAssigned(id, nameof(id)); DomainId.EnsureAssigned(observationId, nameof(observationId));
+        DomainId.EnsureAssigned(id, nameof(id));
+        if (observationId is { } assignedObservationId) DomainId.EnsureAssigned(assignedObservationId, nameof(observationId));
+        if (state == ActivityState.Private) throw new ArgumentException("Un intervallo privato deve essere rappresentato come gap privo di contenuto.", nameof(state));
         Id = id; ObservationId = observationId; Period = period; State = state; EndReason = endReason;
     }
     public ActivityIntervalId Id { get; }
-    public ObservationId ObservationId { get; }
+    public ObservationId? ObservationId { get; }
     public TimeRange Period { get; }
     public ActivityState State { get; }
     public DiscontinuityReason EndReason { get; }
+}
+
+/// <summary>Periodo senza contenuto identificativo, usato anche per la modalità privata.</summary>
+public sealed record ActivityGap
+{
+    public ActivityGap(ActivityGapId id, TimeRange period, ActivityState state)
+    {
+        DomainId.EnsureAssigned(id, nameof(id));
+        if (state is not (ActivityState.Private or ActivityState.Idle or ActivityState.Locked or ActivityState.Suspended or ActivityState.Paused))
+            throw new ArgumentException("Lo stato non rappresenta un gap temporale.", nameof(state));
+        Id = id;
+        Period = period;
+        State = state;
+    }
+
+    public ActivityGapId Id { get; }
+    public TimeRange Period { get; }
+    public ActivityState State { get; }
 }

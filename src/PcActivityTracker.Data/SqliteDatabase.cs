@@ -76,30 +76,35 @@ internal static class DefaultMigrations
     internal static readonly IReadOnlyList<SqliteMigration> All =
     [
         new(1, """
-        CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL CHECK(length(trim(name)) > 0));
-        CREATE TABLE jobs (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, name TEXT NOT NULL CHECK(length(trim(name)) > 0));
+        CREATE TABLE projects (id TEXT PRIMARY KEY CHECK(id <> '00000000-0000-0000-0000-000000000000'), name TEXT NOT NULL CHECK(length(trim(name)) > 0));
+        CREATE TABLE jobs (id TEXT PRIMARY KEY CHECK(id <> '00000000-0000-0000-0000-000000000000'), project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, name TEXT NOT NULL CHECK(length(trim(name)) > 0));
         CREATE INDEX ix_jobs_project ON jobs(project_id);
-        CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT NOT NULL CHECK(length(trim(name)) > 0));
+        CREATE TABLE categories (id TEXT PRIMARY KEY CHECK(id <> '00000000-0000-0000-0000-000000000000'), name TEXT NOT NULL CHECK(length(trim(name)) > 0));
         CREATE TABLE observations (
           id TEXT PRIMARY KEY, source INTEGER NOT NULL, observed_at_utc TEXT NOT NULL,
           time_zone_id TEXT NOT NULL, observed_offset_minutes INTEGER NOT NULL CHECK(observed_offset_minutes BETWEEN -840 AND 840),
-          state INTEGER NOT NULL, process_name TEXT NOT NULL, executable_path TEXT,
+          state INTEGER NOT NULL CHECK(state <> 5), process_name TEXT NOT NULL, executable_path TEXT,
           file_path TEXT, document_type TEXT, browser_domain TEXT, browser_path TEXT,
           CHECK(source <> 1 OR file_path IS NOT NULL), CHECK(source <> 2 OR browser_domain IS NOT NULL));
         CREATE INDEX ix_observations_time ON observations(observed_at_utc);
         CREATE TRIGGER observations_immutable BEFORE UPDATE ON observations BEGIN SELECT RAISE(ABORT, 'raw observation is immutable'); END;
         CREATE TABLE activity_intervals (
-          id TEXT PRIMARY KEY, observation_id TEXT NOT NULL REFERENCES observations(id) ON DELETE CASCADE,
+          id TEXT PRIMARY KEY, observation_id TEXT REFERENCES observations(id) ON DELETE SET NULL,
           start_utc TEXT NOT NULL, end_utc TEXT NOT NULL, state INTEGER NOT NULL, end_reason INTEGER NOT NULL,
           CHECK(end_utc >= start_utc));
         CREATE INDEX ix_activity_intervals_time ON activity_intervals(start_utc, end_utc);
+        CREATE TABLE activity_gaps (
+          id TEXT PRIMARY KEY, start_utc TEXT NOT NULL, end_utc TEXT NOT NULL, state INTEGER NOT NULL,
+          CHECK(end_utc >= start_utc), CHECK(state IN (1,2,3,4,5)));
+        CREATE INDEX ix_activity_gaps_time ON activity_gaps(start_utc, end_utc);
         CREATE TABLE classifications (
-          id TEXT PRIMARY KEY, target_type INTEGER NOT NULL, target_id TEXT NOT NULL, provenance INTEGER NOT NULL,
+          id TEXT PRIMARY KEY, target_type INTEGER NOT NULL CHECK(target_type IN (0,1)), target_id TEXT NOT NULL, provenance INTEGER NOT NULL,
           classified_at_utc TEXT NOT NULL, rule_id TEXT, rationale TEXT NOT NULL CHECK(length(trim(rationale)) > 0),
           project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
           job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
           category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
-          CHECK(provenance <> 1 OR rule_id IS NOT NULL));
+          CHECK(provenance <> 1 OR rule_id IS NOT NULL),
+          CHECK(project_id IS NULL OR job_id IS NULL));
         CREATE INDEX ix_classifications_target ON classifications(target_type, target_id, classified_at_utc);
         CREATE INDEX ix_classifications_project ON classifications(project_id);
         CREATE INDEX ix_classifications_job ON classifications(job_id);

@@ -14,6 +14,11 @@ public sealed record Classification
         if (string.IsNullOrWhiteSpace(rationale)) throw new ArgumentException("La motivazione è obbligatoria.", nameof(rationale));
         if (provenance == ClassificationProvenance.DeterministicRule && string.IsNullOrWhiteSpace(ruleId))
             throw new ArgumentException("Una regola deterministica richiede rule id.", nameof(ruleId));
+        if (projectId is not null && jobId is not null)
+            throw new ArgumentException("Il progetto è derivato dalla commessa e non può essere duplicato.", nameof(projectId));
+        if (projectId is { } assignedProjectId) DomainId.EnsureAssigned(assignedProjectId, nameof(projectId));
+        if (jobId is { } assignedJobId) DomainId.EnsureAssigned(assignedJobId, nameof(jobId));
+        if (categoryId is { } assignedCategoryId) DomainId.EnsureAssigned(assignedCategoryId, nameof(categoryId));
         Id = id; TargetType = targetType; TargetId = targetId; Provenance = provenance; ClassifiedAt = classifiedAt;
         Rationale = rationale; ProjectId = projectId; JobId = jobId; CategoryId = categoryId; RuleId = ruleId;
     }
@@ -30,6 +35,27 @@ public sealed record Classification
     public bool IsAuthoritative => Provenance != ClassificationProvenance.AiSuggestion;
 }
 
-public sealed record Project(ProjectId Id, string Name) { public string Name { get; } = Require(Name); private static string Require(string value) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("Il nome è obbligatorio.") : value.Trim(); }
-public sealed record Job(JobId Id, ProjectId ProjectId, string Name) { public string Name { get; } = string.IsNullOrWhiteSpace(Name) ? throw new ArgumentException("Il nome è obbligatorio.") : Name.Trim(); }
-public sealed record Category(CategoryId Id, string Name) { public string Name { get; } = string.IsNullOrWhiteSpace(Name) ? throw new ArgumentException("Il nome è obbligatorio.") : Name.Trim(); }
+public sealed record Project
+{
+    public Project(ProjectId id, string name) { DomainId.EnsureAssigned(id, nameof(id)); Id = id; Name = RequireName(name); }
+    public ProjectId Id { get; }
+    public string Name { get; }
+    private static string RequireName(string value) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("Il nome è obbligatorio.", nameof(value)) : value.Trim();
+}
+
+public sealed record Job
+{
+    public Job(JobId id, ProjectId projectId, string name) { DomainId.EnsureAssigned(id, nameof(id)); DomainId.EnsureAssigned(projectId, nameof(projectId)); Id = id; ProjectId = projectId; Name = RequireName(name); }
+    public JobId Id { get; }
+    public ProjectId ProjectId { get; }
+    public string Name { get; }
+    private static string RequireName(string value) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("Il nome è obbligatorio.", nameof(value)) : value.Trim();
+}
+
+public sealed record Category
+{
+    public Category(CategoryId id, string name) { DomainId.EnsureAssigned(id, nameof(id)); Id = id; Name = RequireName(name); }
+    public CategoryId Id { get; }
+    public string Name { get; }
+    private static string RequireName(string value) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("Il nome è obbligatorio.", nameof(value)) : value.Trim();
+}

@@ -4,6 +4,7 @@ public interface IDomainId { Guid Value { get; } }
 
 public readonly record struct ObservationId(Guid Value) : IDomainId { public static ObservationId New() => new(Guid.NewGuid()); }
 public readonly record struct ActivityIntervalId(Guid Value) : IDomainId { public static ActivityIntervalId New() => new(Guid.NewGuid()); }
+public readonly record struct ActivityGapId(Guid Value) : IDomainId { public static ActivityGapId New() => new(Guid.NewGuid()); }
 public readonly record struct ClassificationId(Guid Value) : IDomainId { public static ClassificationId New() => new(Guid.NewGuid()); }
 public readonly record struct ProjectId(Guid Value) : IDomainId { public static ProjectId New() => new(Guid.NewGuid()); }
 public readonly record struct JobId(Guid Value) : IDomainId { public static JobId New() => new(Guid.NewGuid()); }

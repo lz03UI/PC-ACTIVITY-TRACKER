@@ -8,6 +8,8 @@ public interface IObservationStore
     Task<IReadOnlyList<RawObservation>> GetObservationsAsync(TimeRange period, CancellationToken cancellationToken = default);
     Task AddActivityIntervalAsync(ActivityInterval interval, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ActivityInterval>> GetActivityIntervalsAsync(TimeRange period, CancellationToken cancellationToken = default);
+    Task AddActivityGapAsync(ActivityGap gap, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ActivityGap>> GetActivityGapsAsync(TimeRange period, CancellationToken cancellationToken = default);
 }
 public interface IClassificationStore
 {
@@ -30,5 +32,9 @@ public interface IWorkTaxonomyStore
 }
 public interface IRetentionStore
 {
+    /// <summary>
+    /// Elimina evidenza e periodi conclusi entro il cutoff, tronca i periodi attraversanti e restituisce
+    /// il numero di osservazioni grezze eliminate. I periodi successivi al cutoff restano invariati.
+    /// </summary>
     Task<int> DeleteActivityBeforeAsync(UtcInstant cutoff, CancellationToken cancellationToken = default);
 }
