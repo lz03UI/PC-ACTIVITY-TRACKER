@@ -96,6 +96,8 @@ Il primo adapter reale è Microsoft Word via Word Object Model/COM. Legge esclus
 
 Il secondo adapter è Microsoft Excel via Excel Object Model/COM. Verifica PID/HWND della snapshot foreground e uguaglianza con `Application.Hwnd`, quindi legge esclusivamente `ActiveWorkbook.FullName` e `Name`. Un mismatch (inclusa l'istanza diversa restituita dalla ROT) è ambiguo e produce `Unresolved`; non usa titoli, UI Automation, polling, add-in o contenuto del workbook.
 
+Poiché Word ed Excel non espongono al processo esterno un segnale affidabile di cambio documento senza add-in, un timer configurabile (default 15 secondi) genera un refresh soltanto quando la snapshot foreground corrente appartiene a un resolver registrato. Il timer usa `TimeProvider`; il refresh ha un singolo slot coalescente bounded e attraversa lo stesso ordering per sequence. Un cambio di valore, precisione o stato resolved/unresolved diventa un confine osservato, mentre un risultato identico non crea una observation. Nessun tempo precedente al refresh viene riattribuito.
+
 ## Runtime Sprint 02A
 
 L'orchestrazione resta nel Core perché è ancora una singola state machine coesa, senza giustificare un progetto `Application`. `TrackingStateMachine` riduce segnali sintetici ordinati dal timestamp monotonic e produce effetti di persistenza; `TrackingCoordinator` materializza tali effetti esclusivamente attraverso `IObservationStore`. Gli stati operativi sono `Stopped`, `Running`, `Paused` e `Private`; idle, lock e suspend sono condizioni sovrapposte che chiudono l'attività identificativa e aprono gap anonimi. Ogni uscita da una condizione di soppressione richiede una nuova snapshot foreground.

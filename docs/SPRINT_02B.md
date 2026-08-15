@@ -124,3 +124,10 @@ I risultati vanno registrati senza includere nomi file o percorsi reali.
 - Almeno due famiglie applicative validate su Windows reale prima di chiudere lo sprint.
 - Nessun browser tracking, classificazione, dashboard, report o AI introdotto in 02B.
 - `docs/PROJECT_STATE.md`, `docs/ARCHITECTURE.md` e `docs/DECISIONS.md` aggiornati per riflettere il comportamento effettivamente implementato.
+
+## Terzo incremento implementato
+
+- Introdotta una reconciliation documentale temporizzata, adattiva per supporto applicativo e limitata alla sola finestra foreground. Il default di 15 secondi equivale a quattro wakeup/minuto soltanto mentre è attivo un resolver registrato; resta configurabile e deve essere confermato dal profiling Windows.
+- Il refresh usa `TimeProvider`, cancellation esplicita e un singolo slot coalescente nella pipeline bounded. Sequence resta autorevole rispetto a foreground, lifecycle, comandi, signal-loss e reconciliation.
+- I cambi documento e precisione (`FullPath`, `FileNameOnly`, `Unresolved`, documento assente/presente e Save As) creano un confine al momento osservato, senza sovrapposizione o durata retroattiva; risultati invariati sono no-op.
+- Consolidati test di fault/timeout/recovery per i gate per-resolver e metriche esclusivamente aggregate. Nessuna migration v4; Sprint 02B resta **APERTO** per profiling e gate applicativi Windows reali.

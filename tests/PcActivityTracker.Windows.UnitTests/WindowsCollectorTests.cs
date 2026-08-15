@@ -43,6 +43,19 @@ public sealed class WindowsCollectorTests
         Assert.Equal(2, reader.Current.Foreground?.ProcessId);
     }
     [Fact]
+    public async Task SupportedForegroundGetsBoundedTimedDocumentRefreshWithoutAnotherWinEvent()
+    {
+        var native = new FakeNative { ProcessName = "WINWORD" };
+        var resolver = new ChangingDocumentResolver();
+        var registry = new DocumentResolverRegistry([resolver], new() { Timeout = TimeSpan.FromSeconds(1) });
+        await using var collector = new WindowsTrackingCollector(native, new() { DocumentRefreshInterval = TimeSpan.FromMilliseconds(30) }, documentResolvers: registry);
+        await collector.StartAsync(); collector.RequestReconciliation();
+        await using var reader = collector.ReadAllAsync().GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync()); Assert.Equal("a.docx", reader.Current.Foreground?.Document?.Value);
+        Assert.True(await reader.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(TrackingSignalKind.DocumentRefresh, reader.Current.Kind); Assert.Equal("b.docx", reader.Current.Foreground?.Document?.Value); Assert.Equal(2, resolver.Calls);
+    }
+    [Fact]
     public async Task LifecycleQueuedBeforeReconciliationPreservesSequenceOrder()
     {
         var native = new FakeNative(); await using var collector = new WindowsTrackingCollector(native, new() { ChannelCapacity = 4 }); await collector.StartAsync();
@@ -143,11 +156,18 @@ public sealed class WindowsCollectorTests
         public int HookCount { get; private set; }
         public int UnhookCount { get; private set; }
         public int ReadCount { get; private set; }
+        public string? ProcessName { get; init; }
         public nint SetForegroundHook(WinEventCallback value) { callback = value; HookCount++; return HookCount; }
         public bool Unhook(nint hook) { UnhookCount++; callback = null; return true; }
         public nint GetForegroundWindow() => 42;
-        public ForegroundSnapshot? ReadForeground(nint window) { ReadCount++; return new((int)window, $"app-{window}"); }
+        public ForegroundSnapshot? ReadForeground(nint window) { ReadCount++; return new((int)window, ProcessName ?? $"app-{window}"); }
         public TimeSpan GetIdleDuration() => TimeSpan.Zero;
         public void Raise(int window) => callback?.Invoke(1, 3, window, 0, 0, 0, 0);
+    }
+    private sealed class ChangingDocumentResolver : IDocumentContextResolver
+    {
+        public string Id => "changing"; public IReadOnlySet<string> SupportedProcessNames { get; } = new HashSet<string> { "WINWORD" }; public int Calls { get; private set; }
+        public ValueTask<DocumentResolutionResult> ResolveAsync(DocumentResolutionRequest request, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(DocumentResolutionResult.FileNameOnly(Calls++ == 0 ? "a.docx" : "b.docx", DocumentProvenance.DirectlyObserved, Id));
     }
 }

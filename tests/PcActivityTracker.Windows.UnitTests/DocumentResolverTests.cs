@@ -67,6 +67,22 @@ public sealed class DocumentResolverTests
         resolver.Release.TrySetResult();
     }
     [Fact]
+    public async Task TimedOutResolverReleasesGateOnlyAfterUnderlyingWorkEndsAndRecovers()
+    {
+        var resolver = new SequencedResolver(blockFirst: true); var registry = Create(resolver, TimeSpan.FromMilliseconds(40));
+        Assert.Equal(DocumentResolutionFailure.TimedOut, (await registry.ResolveAsync(Request)).Failure);
+        Assert.Equal(DocumentResolutionFailure.TimedOut, (await registry.ResolveAsync(Request)).Failure); Assert.Equal(1, resolver.Calls);
+        resolver.Release.TrySetResult(); await resolver.FirstCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var recovered = await registry.ResolveAsync(Request); Assert.Equal(DocumentResolutionPrecision.FileNameOnly, recovered.Precision); Assert.Equal(2, resolver.Calls);
+    }
+    [Fact]
+    public async Task FaultedResolverReleasesGateAndNextRequestRecovers()
+    {
+        var resolver = new SequencedResolver(blockFirst: false, faultFirst: true); var registry = Create(resolver);
+        Assert.Equal(DocumentResolutionFailure.ResolverError, (await registry.ResolveAsync(Request)).Failure);
+        Assert.Equal(DocumentResolutionPrecision.FileNameOnly, (await registry.ResolveAsync(Request)).Precision); Assert.Equal(2, resolver.Calls);
+    }
+    [Fact]
     public async Task ExcelUsesOfficialFullNameAndFallsBackOnlyToWorkbookName()
     {
         var full = new ExcelDocumentContextResolver(new FakeExcelFacade(new(@"C:\Work\book.xlsx", "book.xlsx")));
@@ -141,6 +157,23 @@ public sealed class DocumentResolverTests
             Calls++; var current = Interlocked.Increment(ref concurrency); MaximumConcurrency = Math.Max(MaximumConcurrency, current); Started.TrySetResult();
             try { if (ignoreCancellation) await Release.Task; else await Release.Task.WaitAsync(cancellationToken); return DocumentResolutionResult.Unresolved(resolverId: Id); }
             finally { Interlocked.Decrement(ref concurrency); }
+        }
+    }
+    private sealed class SequencedResolver(bool blockFirst, bool faultFirst = false) : IDocumentContextResolver
+    {
+        public string Id => "sequenced"; public IReadOnlySet<string> SupportedProcessNames { get; } = new HashSet<string> { "WINWORD" };
+        public int Calls { get; private set; }
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FirstCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<DocumentResolutionResult> ResolveAsync(DocumentResolutionRequest request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            if (Calls == 1)
+            {
+                try { if (blockFirst) await Release.Task; if (faultFirst) throw new NotSupportedException("simulated"); }
+                finally { FirstCompleted.TrySetResult(); }
+            }
+            return DocumentResolutionResult.FileNameOnly("recovered.docx", DocumentProvenance.DirectlyObserved, Id);
         }
     }
 }
