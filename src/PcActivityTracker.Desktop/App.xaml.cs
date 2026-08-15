@@ -21,7 +21,9 @@ public partial class App : Application
         var exclusions = await store.GetExclusionsAsync();
         var native = new WindowsNativeFacade();
         var metrics = new RuntimeMetrics();
-        var collector = new WindowsTrackingCollector(native, runtimeMetrics: metrics);
+        var resolverMetrics = new DocumentResolverMetrics();
+        var documentResolvers = new DocumentResolverRegistry([new WordDocumentContextResolver(new WordComDocumentFacade())], metrics: resolverMetrics);
+        var collector = new WindowsTrackingCollector(native, runtimeMetrics: metrics, documentResolvers: documentResolvers);
         var machine = new TrackingStateMachine(new RuleExclusionEvaluator(exclusions), CurrentLocalTime);
         var coordinator = new TrackingCoordinator(machine, store, collector, metrics);
         var main = new MainWindow(coordinator, collector);

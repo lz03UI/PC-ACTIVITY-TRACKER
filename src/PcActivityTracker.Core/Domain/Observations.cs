@@ -16,7 +16,46 @@ public sealed record ApplicationIdentity
     public string? ExecutablePath { get; }
 }
 
-public sealed record FileContext(string Path, string? DocumentType = null)
+public enum DocumentResolutionPrecision { FullPath, FileNameOnly, Unresolved }
+public enum DocumentProvenance { DirectlyObserved, Derived, Unresolved }
+public enum DocumentResolutionFailure { None, UnsupportedApplication, AccessDenied, TimedOut, ResolverError, ApplicationTerminated, ApiUnavailable }
+
+public sealed record DocumentResolutionResult
+{
+    private DocumentResolutionResult(DocumentResolutionPrecision precision, DocumentProvenance provenance,
+        string? value, string? resolverId, DocumentResolutionFailure failure)
+    {
+        if (precision == DocumentResolutionPrecision.Unresolved && value is not null)
+            throw new ArgumentException("Un risultato non risolto non può contenere un riferimento documento.", nameof(value));
+        if (precision != DocumentResolutionPrecision.Unresolved && string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Un risultato risolto richiede un riferimento documento.", nameof(value));
+        if (precision == DocumentResolutionPrecision.Unresolved && provenance != DocumentProvenance.Unresolved)
+            throw new ArgumentException("Un risultato non risolto richiede provenance Unresolved.", nameof(provenance));
+        if (precision != DocumentResolutionPrecision.Unresolved && provenance == DocumentProvenance.Unresolved)
+            throw new ArgumentException("Un risultato risolto richiede provenance osservata o derivata.", nameof(provenance));
+        if (precision == DocumentResolutionPrecision.FileNameOnly && value is not null && (value.Contains('/') || value.Contains('\\')))
+            throw new ArgumentException("FileNameOnly non può contenere componenti di percorso.", nameof(value));
+        if (precision != DocumentResolutionPrecision.Unresolved && failure != DocumentResolutionFailure.None)
+            throw new ArgumentException("Un risultato risolto non può contenere un errore.", nameof(failure));
+        Precision = precision; Provenance = provenance; Value = value?.Trim(); ResolverId = resolverId; Failure = failure;
+    }
+
+    public DocumentResolutionPrecision Precision { get; }
+    public DocumentProvenance Provenance { get; }
+    public string? Value { get; }
+    public string? ResolverId { get; }
+    public DocumentResolutionFailure Failure { get; }
+    public static DocumentResolutionResult FullPath(string path, DocumentProvenance provenance, string resolverId) =>
+        new(DocumentResolutionPrecision.FullPath, provenance, path, resolverId, DocumentResolutionFailure.None);
+    public static DocumentResolutionResult FileNameOnly(string fileName, DocumentProvenance provenance, string resolverId) =>
+        new(DocumentResolutionPrecision.FileNameOnly, provenance, fileName, resolverId, DocumentResolutionFailure.None);
+    public static DocumentResolutionResult Unresolved(DocumentResolutionFailure failure = DocumentResolutionFailure.None, string? resolverId = null) =>
+        new(DocumentResolutionPrecision.Unresolved, DocumentProvenance.Unresolved, null, resolverId, failure);
+}
+
+public sealed record FileContext(string Path, string? DocumentType = null,
+    DocumentResolutionPrecision Precision = DocumentResolutionPrecision.FullPath,
+    DocumentProvenance Provenance = DocumentProvenance.DirectlyObserved)
 {
     public string Path { get; } = string.IsNullOrWhiteSpace(Path) ? throw new ArgumentException("Il percorso è obbligatorio.", nameof(Path)) : Path;
 }

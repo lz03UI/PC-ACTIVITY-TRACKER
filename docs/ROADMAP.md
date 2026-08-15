@@ -5,7 +5,7 @@ Le milestone descrivono lo scope della V1, non date rigide. Apprendimento sul pr
 ## Sprint 00 — fondazione repository (completato)
 
 - Definire confini di solution/progetti, impostazioni centrali, CI e documentazione.
-- Fornire una shell WinUI minima e assembly neutri verificabili su Linux.
+- Fornire una shell WinUI minima e assembly neutrali verificabili su Linux.
 - Aggiungere infrastruttura per unit test e test architetturali.
 - Validare .NET 10 LTS e Windows App SDK stabile su pipeline Linux e Windows.
 
@@ -18,17 +18,26 @@ Le milestone descrivono lo scope della V1, non date rigide. Apprendimento sul pr
 - Progettare schema SQLite versionato, migrazioni transazionali e backup/ripristino locale.
 - Aggiungere unit test e integration test SQLite, inclusi casi di recovery.
 
-## Sprint 02A — collector Windows runtime (corrente)
+## Sprint 02A — collector Windows runtime (completato)
 
 - Implementare stato visibile start/pausa/private mode/stop.
 - Raccogliere intervalli delle applicazioni/programmi in foreground tramite API Windows event-driven.
 - Gestire idle, lock, sleep, shutdown, processi inaccessibili e buffering limitato.
 - Introdurre metriche locali privacy-safe e demandare il profiling esteso a Sprint 02B.
 
-## Sprint 02B — documenti e hardening
+**Exit:** runtime collector, ordering, durata monotonic, persistenza atomica e lifecycle Windows validati dalla CI Linux/Windows e confluiti in `main` tramite PR #3.
 
-- Rilevare file/documenti per le applicazioni esplicitamente supportate, distinguendo percorso completo, solo nome e unresolved.
-- Eseguire hardening, recovery e profiling esteso su sistemi Windows rappresentativi.
+## Sprint 02B — documenti e hardening (corrente)
+
+- Introdurre una matrice esplicita delle applicazioni supportate e resolver documentali separati per adapter.
+- Rilevare file/documenti soltanto per applicazioni esplicitamente supportate, distinguendo `FullPath`, `FileNameOnly` e `Unresolved` senza inferire dati non osservati.
+- Applicare minimizzazione ed esclusioni `FilePath` prima della costruzione/persistenza di `RawObservation` quando il dato è disponibile.
+- Integrare il contesto documento nel runtime senza leggere contenuto, clipboard, testo digitato o screenshot.
+- Rafforzare crash/restart, recovery, degrado e diagnostica privacy-safe senza introdurre checkpoint che inventino durata non osservata.
+- Eseguire profiling esteso su sistemi Windows rappresentativi: CPU, working set, wakeup, code/drop/reconciliation, throughput SQLite e crescita DB/WAL.
+- Validare lock/unlock, RDP disconnect/reconnect, suspend/resume, shutdown/logoff, cambi fuso/offset e applicazioni supportate su Windows reale.
+
+**Exit:** i resolver documentali supportati producono contesto minimizzato e testabile, il runtime rimane local-first/offline e bounded, la CI completa è verde e i rischi Windows-only sono documentati con risultati di profiling riproducibili.
 
 ## Sprint 03 — browser e classificazione deterministica
 
