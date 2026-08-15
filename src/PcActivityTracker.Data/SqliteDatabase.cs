@@ -4,7 +4,7 @@ namespace PcActivityTracker.Data;
 
 public sealed class SqliteDatabase
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
     private readonly string connectionString;
     private readonly IReadOnlyList<SqliteMigration> migrations;
 
@@ -124,6 +124,10 @@ internal static class DefaultMigrations
         ALTER TABLE activity_intervals ADD COLUMN elapsed_monotonic INTEGER NOT NULL DEFAULT 0 CHECK(elapsed_monotonic IN (0,1));
         ALTER TABLE activity_gaps ADD COLUMN elapsed_ticks INTEGER NULL CHECK(elapsed_ticks IS NULL OR elapsed_ticks >= 0);
         ALTER TABLE activity_gaps ADD COLUMN elapsed_monotonic INTEGER NOT NULL DEFAULT 0 CHECK(elapsed_monotonic IN (0,1));
+        """),
+        new(3, """
+        ALTER TABLE observations ADD COLUMN document_precision INTEGER NOT NULL DEFAULT 0 CHECK(document_precision IN (0,1));
+        ALTER TABLE observations ADD COLUMN document_provenance INTEGER NOT NULL DEFAULT 0 CHECK(document_provenance IN (0,1));
         """)
     ];
 }

@@ -34,6 +34,7 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
     private readonly WindowsCollectorOptions options;
     private readonly TimeProvider time;
     private readonly RuntimeMetrics metrics;
+    private readonly DocumentResolverRegistry? documentResolvers;
     private readonly Channel<RawSignal> queue;
     private readonly Channel<RawSignal> commandQueue;
     private readonly Channel<bool> wake;
@@ -52,9 +53,10 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
     private volatile bool accepting;
 
     public WindowsTrackingCollector(IWindowsNativeFacade native, WindowsCollectorOptions? options = null,
-        TimeProvider? timeProvider = null, RuntimeMetrics? runtimeMetrics = null)
+        TimeProvider? timeProvider = null, RuntimeMetrics? runtimeMetrics = null, DocumentResolverRegistry? documentResolvers = null)
     {
         this.native = native; this.options = options ?? new(); time = timeProvider ?? TimeProvider.System; metrics = runtimeMetrics ?? new();
+        this.documentResolvers = documentResolvers;
         if (this.options.ChannelCapacity < 1) throw new ArgumentOutOfRangeException(nameof(options));
         queue = Channel.CreateBounded<RawSignal>(new BoundedChannelOptions(this.options.ChannelCapacity)
         { SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait });
@@ -153,7 +155,7 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
             {
                 var deferred = Earlier(Earlier(Earlier(lost, reconcile), control), conditions);
                 if (deferred is not null && TakeDeferred(deferred))
-                { yield return Resolve(deferred); continue; }
+                { yield return await ResolveAsync(deferred, cancellationToken); continue; }
                 await wake.Reader.ReadAsync(cancellationToken);
                 continue;
             }
@@ -164,12 +166,13 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
             var nextQueued = Earlier(pending, pendingCommand)!;
             var beforePending = Earlier(Earlier(Earlier(lost, reconcile), control), conditions);
             if (beforePending is not null && beforePending.Sequence < nextQueued.Sequence && TakeDeferred(beforePending))
-            { yield return Resolve(beforePending); continue; }
+            { yield return await ResolveAsync(beforePending, cancellationToken); continue; }
 
             var item = nextQueued;
             if (ReferenceEquals(item, pending)) pending = null; else pendingCommand = null;
             if (item.Kind == TrackingSignalKind.ForegroundChanged && item.Generation != Interlocked.Read(ref generation)) continue;
             var snapshot = item.Kind == TrackingSignalKind.ForegroundChanged ? native.ReadForeground(item.Window) : null;
+            snapshot = await ResolveDocumentAsync(snapshot, item.Window, cancellationToken);
             if (item.Kind == TrackingSignalKind.ForegroundChanged && item.Generation != Interlocked.Read(ref generation)) continue;
             yield return ToTrackingSignal(item, snapshot);
         }
@@ -183,8 +186,19 @@ public sealed class WindowsTrackingCollector : ITrackingSignalSource
             : item.Kind == TrackingSignalKind.ConditionsChanged
                 ? Interlocked.CompareExchange(ref conditionsOverflow, null, item) == item
                 : Interlocked.CompareExchange(ref controlOverflow, null, item) == item;
-    private TrackingSignal Resolve(RawSignal item) => ToTrackingSignal(item,
-        item.Kind == TrackingSignalKind.Reconcile ? native.ReadForeground(item.Window) : null);
+    private async ValueTask<TrackingSignal> ResolveAsync(RawSignal item, CancellationToken cancellationToken)
+    {
+        var snapshot = item.Kind == TrackingSignalKind.Reconcile ? native.ReadForeground(item.Window) : null;
+        snapshot = await ResolveDocumentAsync(snapshot, item.Window, cancellationToken);
+        return ToTrackingSignal(item, snapshot);
+    }
+
+    private async ValueTask<ForegroundSnapshot?> ResolveDocumentAsync(ForegroundSnapshot? snapshot, nint window, CancellationToken cancellationToken)
+    {
+        if (snapshot is null || documentResolvers is null) return snapshot;
+        var result = await documentResolvers.ResolveAsync(new(snapshot.ProcessId, snapshot.ProcessName, window), cancellationToken);
+        return result.Failure == DocumentResolutionFailure.UnsupportedApplication ? snapshot : snapshot with { Document = result };
+    }
 
     private void OnForeground(nint hookIgnored, uint eventIgnored, nint window, int objectIgnored, int childIgnored, uint threadIgnored, uint timeIgnored)
     {
