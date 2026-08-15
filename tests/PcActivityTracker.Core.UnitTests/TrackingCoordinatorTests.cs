@@ -56,7 +56,7 @@ public sealed class TrackingCoordinatorTests
         private bool reconcile;
         public bool Stopped { get; private set; }
         public async IAsyncEnumerable<TrackingSignal> ReadAllAsync([EnumeratorCancellation] CancellationToken cancellationToken = default) { foreach (var value in values) { current = value; yield return value; if (reconcile) { reconcile = false; yield return current with { Kind = TrackingSignalKind.Reconcile, Foreground = foreground }; } await Task.Yield(); } }
-        public bool TryPublish(TrackingSignalKind kind) => true;
+        public ValueTask PublishAsync(TrackingSignalKind kind, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public void RequestReconciliation() => reconcile = true;
         public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task StopAsync(CancellationToken cancellationToken = default) { Stopped = true; return Task.CompletedTask; }

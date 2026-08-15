@@ -60,34 +60,43 @@ public sealed record RawObservation
 public sealed record ActivityInterval
 {
     public ActivityInterval(ActivityIntervalId id, ObservationId? observationId, TimeRange period, ActivityState state,
-        DiscontinuityReason endReason = DiscontinuityReason.None)
+        DiscontinuityReason endReason = DiscontinuityReason.None, TimeSpan? elapsed = null, bool isElapsedMonotonic = false)
     {
         DomainId.EnsureAssigned(id, nameof(id));
         if (observationId is { } assignedObservationId) DomainId.EnsureAssigned(assignedObservationId, nameof(observationId));
         if (state == ActivityState.Private) throw new ArgumentException("Un intervallo privato deve essere rappresentato come gap privo di contenuto.", nameof(state));
+        if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
         Id = id; ObservationId = observationId; Period = period; State = state; EndReason = endReason;
+        Elapsed = elapsed ?? period.Duration; IsElapsedMonotonic = isElapsedMonotonic;
     }
     public ActivityIntervalId Id { get; }
     public ObservationId? ObservationId { get; }
     public TimeRange Period { get; }
     public ActivityState State { get; }
     public DiscontinuityReason EndReason { get; }
+    public TimeSpan Elapsed { get; }
+    public bool IsElapsedMonotonic { get; }
 }
 
 /// <summary>Periodo senza contenuto identificativo, usato anche per la modalità privata.</summary>
 public sealed record ActivityGap
 {
-    public ActivityGap(ActivityGapId id, TimeRange period, ActivityState state)
+    public ActivityGap(ActivityGapId id, TimeRange period, ActivityState state, TimeSpan? elapsed = null, bool isElapsedMonotonic = false)
     {
         DomainId.EnsureAssigned(id, nameof(id));
         if (state is not (ActivityState.Private or ActivityState.Idle or ActivityState.Locked or ActivityState.Suspended or ActivityState.Paused))
             throw new ArgumentException("Lo stato non rappresenta un gap temporale.", nameof(state));
+        if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
         Id = id;
         Period = period;
         State = state;
+        Elapsed = elapsed ?? period.Duration;
+        IsElapsedMonotonic = isElapsedMonotonic;
     }
 
     public ActivityGapId Id { get; }
     public TimeRange Period { get; }
     public ActivityState State { get; }
+    public TimeSpan Elapsed { get; }
+    public bool IsElapsedMonotonic { get; }
 }

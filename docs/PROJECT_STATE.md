@@ -14,10 +14,12 @@
 - Implementata la state machine deterministica platform-neutral per start, foreground, idle, lock/disconnect, suspend, pause, private, resume, stop, signal-loss, restart, discontinuità, duplicati e segnali stale, con priorità effettiva centralizzata.
 - Implementato il collector foreground Windows event-driven con ingestion realmente bounded e un solo consumer awaitable, timestamp producer-side, reconciliation barrier, risoluzione processo tollerante agli accessi negati e idle configurabile (default cinque minuti).
 - Integrati messaggi WTS, power e shutdown/logoff best-effort e controlli minimi WinUI con stato/degrado sempre visibile.
-- Applicate esclusioni Application prima della creazione di `RawObservation`; Private persiste esclusivamente gap anonimi. WindowTitle/FilePath sono esplicitamente rinviate e nessun titolo è acquisito. Nessun gap `Excluded` e nessuna migration/checkpoint sono stati introdotti.
+- Applicate esclusioni Application prima della creazione di `RawObservation`; Private persiste esclusivamente gap anonimi. WindowTitle/FilePath sono esplicitamente rinviate e nessun titolo è acquisito. Nessun gap `Excluded` e nessun checkpoint sono stati introdotti.
 - Gli effetti di ogni segnale sono persistiti atomicamente tramite `ITrackingBatchStore`; un errore porta il runtime in `Faulted`, arresta l'ingestione e impedisce riferimenti a observation non confermate.
 - Aggiunte metriche locali privacy-safe per segnali, drop, riconciliazioni, scritture, CPU, working set e crescita effettiva DB + WAL.
-- Aggiunti 52 test rispetto alla baseline Sprint 01, portando il totale a 102 test: 58 Core, 24 Data integration, 8 architecture e 12 adapter Windows.
+- Aggiunta migration v2 additiva per conservare la durata monotonic-derived separatamente dagli estremi UTC civili; migration v1 non è stata modificata.
+- Comandi user awaitable, ordering atomico dei producer, condizioni OS convergenti, segnali pre-Start non terminali e shutdown/time-zone filtering sono coperti dal runtime corretto.
+- Aggiunti 60 test rispetto alla baseline Sprint 01, portando il totale a 110 test: 60 Core, 25 Data integration, 8 architecture e 17 adapter Windows.
 
 ## Completato in Sprint 01
 
@@ -50,7 +52,8 @@ Sprint 00 non implementa raccolta attività/file/browser, classificazione, schem
 
 ## Stato della validazione
 
-- Sprint 02A correttivo: restore locked, format, build Release e 90 test cross-platform sono verdi in locale; build e 12 test dell'adapter Windows con facade fake sono verdi anche dal runner Linux, per 102 test totali.
+- La seconda correzione Sprint 02A è stata verificata dalla CI run #10, verde su Linux e Windows.
+- Terza correzione: restore locked, format, build Release e 93 test cross-platform sono verdi in locale; build e 17 test dell'adapter Windows con facade fake sono verdi anche dal runner Linux, per 110 test totali. La nuova CI Windows è in attesa dopo la pubblicazione.
 - La build WinUI locale non è eseguibile su Linux perché `XamlCompiler.exe` richiede Windows/Visual Studio MSBuild. La solution completa, il launch reale, hook/window lifecycle interattivi e profiling su hardware fisico restano da validare su Windows.
 - I lock file NuGet sono rigenerati per .NET 10 e le dipendenze aggiornate.
 - La validazione cross-platform locale comprende restore bloccato, build, test e verifica del formato.

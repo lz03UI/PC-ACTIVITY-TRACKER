@@ -104,6 +104,14 @@ La reconciliation è una barriera ordinata: incrementa la generation sotto lo st
 
 `ITrackingBatchStore` è la porta Core orientata al caso d'uso. Data persiste tutti gli effetti di un segnale in una singola transazione SQLite. Il coordinator conserva uno snapshot della macchina: se il batch fallisce, ripristina lo snapshot, passa a `Faulted`, arresta la sorgente e non consuma altri segnali. Un nuovo Start esplicito effettua restart e reconciliation. Le exclusion `WindowTitle` e `FilePath` sono disabilitate in 02A: il collector non acquisisce titoli e i resolver documento restano in 02B.
 
+### Durata monotonic e schema v2
+
+Activity e gap aperti conservano timestamp monotonic e frequenza del producer. Alla chiusura, `Elapsed` è derivato esclusivamente dalla differenza monotonic; `start_utc` e `end_utc` restano coordinate della timeline civile e possono quindi divergere dalla durata in presenza di cambi del wall clock. La migration v2, additiva, aggiunge `elapsed_ticks` ed `elapsed_monotonic` a interval e gap senza modificare v1. Le righe legacy mantengono `NULL` e usano esplicitamente la durata civile come fallback non-monotonic; la retention che tronca una riga invalida il dato elapsed perché non esiste una mappatura corretta del cutoff civile sul clock monotonic originale.
+
+I comandi utente attraversano una control lane bounded e awaitable: vengono confermati dalla scrittura in coda e non sono scartati. Foreground e segnali OS usano un gate di pubblicazione che rende atomici sequence ed enqueue; il WinEvent callback usa soltanto `Wait(0)` e, se il gate non è immediatamente disponibile, converge su signal-loss. Idle, lock/disconnect e suspend mantengono inoltre uno snapshot atomico dell'ultimo stato noto: dopo saturazione il consumer applica `ConditionsChanged` e converge al valore corrente anziché perdere una metà della transizione.
+
+`RunAsync` rimane vivo mentre la macchina è `Stopped`: segnali OS pre-Start vengono ignorati, quindi Start richiede una reconciliation che include sia foreground sia condizioni OS correnti. La terminazione avviene soltanto per Stop processato, Faulted o cancellation/dispose. `WM_QUERYENDSESSION` non avvia cleanup; solo `WM_ENDSESSION(TRUE)` pubblica Stop. `WM_SETTINGCHANGE` viene confrontato con Id/offset effettivi tramite `TimeZoneChangeDetector`, mentre `WM_TIMECHANGE` resta dedicato al cambiamento dell'ora di sistema.
+
 ## Fondazione Sprint 01
 
 Il dominio rappresenta istanti UTC, contesto locale (identificativo del fuso e offset osservato), intervalli semiaperti, stato active/idle/locked/suspended/paused/private e discontinuità di clock. Il timestamp monotonic è un valore distinto dal wall clock: i collector futuri lo useranno per misurare il tempo trascorso, senza persisterlo come istante civile.

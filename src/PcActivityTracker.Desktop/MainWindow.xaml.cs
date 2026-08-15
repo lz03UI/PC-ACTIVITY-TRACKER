@@ -20,7 +20,7 @@ public sealed partial class MainWindow : Window
         coordinator.StatusChanged += (_, status) => DispatcherQueue.TryEnqueue(() => Render(status));
         Closed += Window_Closed;
     }
-    public void AttachLifecycle() => lifecycle = new(WindowNative.GetWindowHandle(this), collector.TryPublish);
+    public void AttachLifecycle() => lifecycle = new(WindowNative.GetWindowHandle(this), collector.TryPublishOsSignal);
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
@@ -28,15 +28,15 @@ public sealed partial class MainWindow : Window
         {
             await collector.StartAsync(lifetime.Token);
             coordinatorWorker = RunCoordinatorAsync();
-            _ = collector.TryPublish(TrackingSignalKind.Start);
+            await collector.PublishAsync(TrackingSignalKind.Start, lifetime.Token);
         }
         catch (Exception) { HealthText.Text = "Collector degradato: avvio non riuscito"; }
     }
-    private void Pause_Click(object sender, RoutedEventArgs e) =>
-        _ = collector.TryPublish(coordinator.Status == TrackingStatus.Paused ? TrackingSignalKind.Resume : TrackingSignalKind.Pause);
-    private void Private_Click(object sender, RoutedEventArgs e) =>
-        _ = collector.TryPublish(coordinator.Status == TrackingStatus.Private ? TrackingSignalKind.ExitPrivate : TrackingSignalKind.EnterPrivate);
-    private void Stop_Click(object sender, RoutedEventArgs e) => _ = collector.TryPublish(TrackingSignalKind.Stop);
+    private async void Pause_Click(object sender, RoutedEventArgs e) =>
+        await collector.PublishAsync(coordinator.Status == TrackingStatus.Paused ? TrackingSignalKind.Resume : TrackingSignalKind.Pause, lifetime.Token);
+    private async void Private_Click(object sender, RoutedEventArgs e) =>
+        await collector.PublishAsync(coordinator.Status == TrackingStatus.Private ? TrackingSignalKind.ExitPrivate : TrackingSignalKind.EnterPrivate, lifetime.Token);
+    private async void Stop_Click(object sender, RoutedEventArgs e) => await collector.PublishAsync(TrackingSignalKind.Stop, lifetime.Token);
 
     private async Task RunCoordinatorAsync()
     {
@@ -46,7 +46,7 @@ public sealed partial class MainWindow : Window
     }
     private async void Window_Closed(object sender, WindowEventArgs args)
     {
-        lifecycle?.Dispose(); _ = collector.TryPublish(TrackingSignalKind.Stop); lifetime.Cancel();
+        lifecycle?.Dispose(); lifetime.Cancel();
         if (coordinatorWorker is { } worker)
             try { await worker; } catch (OperationCanceledException) { }
         await collector.DisposeAsync(); lifetime.Dispose();

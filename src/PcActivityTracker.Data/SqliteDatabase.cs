@@ -4,7 +4,7 @@ namespace PcActivityTracker.Data;
 
 public sealed class SqliteDatabase
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
     private readonly string connectionString;
     private readonly IReadOnlyList<SqliteMigration> migrations;
 
@@ -118,6 +118,12 @@ internal static class DefaultMigrations
         CREATE TRIGGER intervals_delete_classifications AFTER DELETE ON activity_intervals
         BEGIN DELETE FROM classifications WHERE target_type = 1 AND target_id = OLD.id; END;
         CREATE TABLE exclusions (id TEXT PRIMARY KEY, kind INTEGER NOT NULL, pattern TEXT NOT NULL CHECK(length(trim(pattern)) > 0), enabled INTEGER NOT NULL CHECK(enabled IN (0,1)));
+        """),
+        new(2, """
+        ALTER TABLE activity_intervals ADD COLUMN elapsed_ticks INTEGER NULL CHECK(elapsed_ticks IS NULL OR elapsed_ticks >= 0);
+        ALTER TABLE activity_intervals ADD COLUMN elapsed_monotonic INTEGER NOT NULL DEFAULT 0 CHECK(elapsed_monotonic IN (0,1));
+        ALTER TABLE activity_gaps ADD COLUMN elapsed_ticks INTEGER NULL CHECK(elapsed_ticks IS NULL OR elapsed_ticks >= 0);
+        ALTER TABLE activity_gaps ADD COLUMN elapsed_monotonic INTEGER NOT NULL DEFAULT 0 CHECK(elapsed_monotonic IN (0,1));
         """)
     ];
 }

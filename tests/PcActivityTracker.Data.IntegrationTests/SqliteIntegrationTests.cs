@@ -13,7 +13,19 @@ public sealed class SqliteIntegrationTests : IDisposable
     public void Dispose() { SqliteConnection.ClearAllPools(); foreach (var suffix in new[] { "", "-wal", "-shm" }) File.Delete(path + suffix); }
 
     [Fact] public async Task NewDatabaseMigratesToLatestSchema() { var db = await Create(); Assert.Equal(SqliteDatabase.CurrentSchemaVersion, await db.GetSchemaVersionAsync()); }
-    [Fact] public async Task InitializeCanReopenDatabase() { await Create(); var reopened = new SqliteDatabase(path); await reopened.InitializeAsync(); Assert.Equal(1, await reopened.GetSchemaVersionAsync()); }
+    [Fact] public async Task InitializeCanReopenDatabase() { await Create(); var reopened = new SqliteDatabase(path); await reopened.InitializeAsync(); Assert.Equal(2, await reopened.GetSchemaVersionAsync()); }
+    [Fact]
+    public async Task MigrationV1ToV2PreservesRowsAndMarksLegacyElapsedAsCivilFallback()
+    {
+        var migrations = new[]
+        {
+            new SqliteMigration(1, "CREATE TABLE activity_intervals(id TEXT PRIMARY KEY,observation_id TEXT,start_utc TEXT NOT NULL,end_utc TEXT NOT NULL,state INTEGER NOT NULL,end_reason INTEGER NOT NULL); CREATE TABLE activity_gaps(id TEXT PRIMARY KEY,start_utc TEXT NOT NULL,end_utc TEXT NOT NULL,state INTEGER NOT NULL); INSERT INTO activity_gaps VALUES('legacy','2026-08-14T12:00:00.0000000+00:00','2026-08-14T12:01:00.0000000+00:00',1);"),
+            new SqliteMigration(2, "ALTER TABLE activity_intervals ADD COLUMN elapsed_ticks INTEGER NULL CHECK(elapsed_ticks IS NULL OR elapsed_ticks >= 0); ALTER TABLE activity_intervals ADD COLUMN elapsed_monotonic INTEGER NOT NULL DEFAULT 0 CHECK(elapsed_monotonic IN (0,1)); ALTER TABLE activity_gaps ADD COLUMN elapsed_ticks INTEGER NULL CHECK(elapsed_ticks IS NULL OR elapsed_ticks >= 0); ALTER TABLE activity_gaps ADD COLUMN elapsed_monotonic INTEGER NOT NULL DEFAULT 0 CHECK(elapsed_monotonic IN (0,1));")
+        };
+        var database = new SqliteDatabase(path, migrations); await database.InitializeAsync();
+        await using var connection = Open(); await using var command = connection.CreateCommand(); command.CommandText = "SELECT elapsed_ticks,elapsed_monotonic FROM activity_gaps WHERE id='legacy';";
+        await using var reader = await command.ExecuteReaderAsync(); Assert.True(await reader.ReadAsync()); Assert.True(reader.IsDBNull(0)); Assert.Equal(0L, reader.GetInt64(1));
+    }
     [Fact] public async Task ObservationRoundTrips() { var db = await Create(); var store = new SqliteActivityStore(db); var value = Observation(); await store.AddObservationAsync(value); var found = await store.GetObservationsAsync(new(new(Now.Value.AddMinutes(-1)), new(Now.Value.AddMinutes(1)))); Assert.Equal(value, Assert.Single(found)); }
     [Fact] public async Task ActivityIntervalRoundTrips() { var db = await Create(); var store = new SqliteActivityStore(db); var observation = Observation(); await store.AddObservationAsync(observation); var interval = new ActivityInterval(ActivityIntervalId.New(), observation.Id, new(Now, new(Now.Value.AddMinutes(2))), ActivityState.Active); await store.AddActivityIntervalAsync(interval); Assert.Equal(interval, Assert.Single(await store.GetActivityIntervalsAsync(new(Now, new(Now.Value.AddHours(1)))))); }
     [Fact] public async Task ForeignKeysRejectOrphanInterval() { var db = await Create(); var store = new SqliteActivityStore(db); var interval = new ActivityInterval(ActivityIntervalId.New(), ObservationId.New(), new(Now, new(Now.Value.AddMinutes(1))), ActivityState.Active); await Assert.ThrowsAsync<SqliteException>(() => store.AddActivityIntervalAsync(interval)); }
@@ -95,7 +107,7 @@ public sealed class SqliteIntegrationTests : IDisposable
         private TrackingSignal current = RuntimeSignal(TrackingSignalKind.Start, 0);
         private bool reconcile;
         public async IAsyncEnumerable<TrackingSignal> ReadAllAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) { foreach (var signal in signals) { cancellationToken.ThrowIfCancellationRequested(); current = signal; yield return signal; if (reconcile) { reconcile = false; yield return current with { Kind = TrackingSignalKind.Reconcile, Foreground = foreground }; } await Task.Yield(); } }
-        public bool TryPublish(TrackingSignalKind kind) => true;
+        public ValueTask PublishAsync(TrackingSignalKind kind, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public void RequestReconciliation() => reconcile = true;
         public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
