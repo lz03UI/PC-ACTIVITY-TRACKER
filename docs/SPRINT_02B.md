@@ -131,3 +131,9 @@ I risultati vanno registrati senza includere nomi file o percorsi reali.
 - Il refresh usa `TimeProvider`, cancellation esplicita e un singolo slot coalescente nella pipeline bounded. Sequence resta autorevole rispetto a foreground, lifecycle, comandi, signal-loss e reconciliation.
 - I cambi documento e precisione (`FullPath`, `FileNameOnly`, `Unresolved`, documento assente/presente e Save As) creano un confine al momento osservato, senza sovrapposizione o durata retroattiva; risultati invariati sono no-op.
 - Consolidati test di fault/timeout/recovery per i gate per-resolver e metriche esclusivamente aggregate. Nessuna migration v4; Sprint 02B resta **APERTO** per profiling e gate applicativi Windows reali.
+
+## Hotfix P1 startup WinUI
+
+- La validation su hardware Windows reale ha rilevato un crash allo startup con firma `0xC000027B` / `0x802B000A`. Una diagnosi differenziale esterna con controlli WinUI minimali ha confermato come causa l'assenza di `XamlControlsResources` mentre la finestra usa una theme resource WinUI.
+- Il fix carica `XamlControlsResources` nei merged dictionaries di `App.xaml` ed è protetto da un test automatico semantico. Non modifica Windows App SDK, deployment runtime o schema; nessuna migration v4 è introdotta.
+- La validation post-fix su hardware Windows reale resta **PENDING**. Sprint 02B rimane **APERTO** e il P1 non è considerato definitivamente risolto fino a quel gate.

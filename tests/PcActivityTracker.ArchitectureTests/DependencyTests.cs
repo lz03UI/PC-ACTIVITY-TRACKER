@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using NetArchTest.Rules;
 using Xunit;
 
@@ -5,6 +6,8 @@ namespace PcActivityTracker.ArchitectureTests;
 
 public sealed class DependencyTests
 {
+    private const string DesktopAppXamlResourceName = "PcActivityTracker.Desktop.App.xaml";
+
     private static readonly System.Reflection.Assembly CoreAssembly =
         typeof(Core.AssemblyMarker).Assembly;
 
@@ -39,6 +42,24 @@ public sealed class DependencyTests
             .GetResult();
 
         Assert.True(result.IsSuccessful, FormatFailure(result));
+    }
+
+    [Fact]
+    public void DesktopApplicationLoadsXamlControlsResources()
+    {
+        using var appXaml = typeof(DependencyTests).Assembly
+            .GetManifestResourceStream(DesktopAppXamlResourceName);
+
+        Assert.NotNull(appXaml);
+
+        var document = XDocument.Load(appXaml);
+        var mergedDictionaries = document.Descendants()
+            .Single(element => element.Name.LocalName == "ResourceDictionary.MergedDictionaries");
+
+        Assert.Contains(
+            mergedDictionaries.Elements(),
+            element => element.Name.LocalName == "XamlControlsResources" &&
+                       element.Name.NamespaceName == "using:Microsoft.UI.Xaml.Controls");
     }
 
     private static string FormatFailure(TestResult result) =>
