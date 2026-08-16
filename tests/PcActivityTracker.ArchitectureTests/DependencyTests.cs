@@ -41,6 +41,41 @@ public sealed class DependencyTests
         Assert.True(result.IsSuccessful, FormatFailure(result));
     }
 
+    [Fact]
+    public void DesktopApplicationLoadsXamlControlsResources()
+    {
+        var appXaml = System.Xml.Linq.XDocument.Load(FindRepositoryFile(
+            "src",
+            "PcActivityTracker.Desktop",
+            "App.xaml"));
+        System.Xml.Linq.XNamespace presentation =
+            "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        System.Xml.Linq.XNamespace controls = "using:Microsoft.UI.Xaml.Controls";
+
+        var mergedDictionaries = appXaml.Root?
+            .Element(presentation + "Application.Resources")?
+            .Element(presentation + "ResourceDictionary")?
+            .Element(presentation + "ResourceDictionary.MergedDictionaries");
+
+        Assert.NotNull(mergedDictionaries);
+        Assert.Contains(
+            mergedDictionaries.Elements(),
+            element => element.Name == controls + "XamlControlsResources");
+    }
+
+    private static string FindRepositoryFile(params string[] segments)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PcActivityTracker.sln")))
+                return Path.Combine(directory.FullName, Path.Combine(segments));
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the repository root.");
+    }
+
     private static string FormatFailure(TestResult result) =>
         result.IsSuccessful
             ? string.Empty

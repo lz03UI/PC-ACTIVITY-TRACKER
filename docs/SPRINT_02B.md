@@ -131,3 +131,9 @@ I risultati vanno registrati senza includere nomi file o percorsi reali.
 - Il refresh usa `TimeProvider`, cancellation esplicita e un singolo slot coalescente nella pipeline bounded. Sequence resta autorevole rispetto a foreground, lifecycle, comandi, signal-loss e reconciliation.
 - I cambi documento e precisione (`FullPath`, `FileNameOnly`, `Unresolved`, documento assente/presente e Save As) creano un confine al momento osservato, senza sovrapposizione o durata retroattiva; risultati invariati sono no-op.
 - Consolidati test di fault/timeout/recovery per i gate per-resolver e metriche esclusivamente aggregate. Nessuna migration v4; Sprint 02B resta **APERTO** per profiling e gate applicativi Windows reali.
+
+## Correzione P1 avvio WinUI
+
+- La causa radice del crash startup `0xC000027B` era il dizionario temi WinUI non caricato mentre `MainWindow.xaml` risolveva `CardBackgroundFillColorDefaultBrush`.
+- Il fix aggiunge esclusivamente `XamlControlsResources` ad `App.xaml` e un test di regressione dedicato; runtime, package e logica applicativa restano invariati.
+- Validazione Windows reale: restore/build Release PASS, **146/146 test PASS**, finestra stabile oltre 15 secondi e nessun nuovo Application Error del tracker.

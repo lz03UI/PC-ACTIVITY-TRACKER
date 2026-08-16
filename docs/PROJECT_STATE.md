@@ -1,6 +1,6 @@
 # Stato del progetto
 
-**Aggiornato:** 2026-08-15
+**Aggiornato:** 2026-08-16
 **Fase:** Sprint 02B — documenti e hardening (avviato)
 
 ## Baseline completata
@@ -101,3 +101,9 @@ Validare Word ed Excel COM e il refresh a 15 secondi su Windows reale (documento
 - Un titolo finestra può essere ambiguo o contenere dati non destinati al tracking; non deve diventare una fonte general-purpose.
 - Il percorso completo è più sensibile del solo nome file: minimizzazione ed esclusioni devono essere applicate prima possibile.
 - Il profiling su runner CI non sostituisce la validazione di consumo e lifecycle su hardware Windows fisico.
+
+## Correzione P1 avvio WinUI
+
+- La diagnostica differenziale su Windows reale ha isolato il crash startup nella risorsa tema `CardBackgroundFillColorDefaultBrush` usata senza `XamlControlsResources`.
+- `App.xaml` carica ora il dizionario risorse WinUI; il test `DesktopApplicationLoadsXamlControlsResources` protegge la configurazione.
+- Restore/build Windows sono verdi, la suite è **146/146 PASS** e il launch Release reale è rimasto stabile per oltre 15 secondi senza nuovi Application Error.
