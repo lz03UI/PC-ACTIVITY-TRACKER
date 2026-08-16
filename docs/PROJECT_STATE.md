@@ -62,6 +62,13 @@ La specifica esecutiva dello sprint è in `docs/SPRINT_02B.md`.
 - Aggiunti contatori locali aggregati per refresh tentati, cambiati e invariati; nessun campo stringa o dato documento è incluso.
 - Nessuna migration v4: lo schema resta v3. La suite automatizzata è di 145 test (69 Core, 26 Data integration, 8 architecture, 42 Windows adapter). Sprint 02B resta **APERTO** per profiling e validazione Word/Excel reali.
 
+### Hotfix P1 startup WinUI
+
+- Durante la validation su hardware Windows reale è stato rilevato un crash sistematico allo startup con firma `0xC000027B` / `0x802B000A`.
+- Una diagnosi differenziale esterna con controlli WinUI minimali ha isolato la causa nell'assenza di `XamlControlsResources`, necessaria per la theme resource usata dalla finestra principale.
+- `App.xaml` ora carica `XamlControlsResources` nei merged resource dictionaries; un test di configurazione protegge il requisito. Non sono cambiati Windows App SDK, runtime deployment o schema SQLite.
+- La validation automatizzata è separata dal gate post-fix su hardware Windows reale, che resta **PENDING**. Il P1 non è dichiarato definitivamente risolto e Sprint 02B resta **APERTO**.
+
 
 ## Ordine di implementazione Sprint 02B
 
@@ -93,7 +100,7 @@ La specifica esecutiva dello sprint è in `docs/SPRINT_02B.md`.
 
 ## Prossimo task sicuro
 
-Validare Word ed Excel COM e il refresh a 15 secondi su Windows reale (documento locale, Save As, unsaved, Protected View, access denied, più istanze e chiusura durante la risoluzione), quindi eseguire profiling prolungato senza iniziare Sprint 03.
+Eseguire prima il gate post-fix su hardware Windows reale: full Release build, avvio stabile senza `0xC000027B` / `0x802B000A` e inizializzazione DB. Solo dopo, validare Word ed Excel COM e il refresh a 15 secondi, quindi eseguire profiling prolungato senza iniziare Sprint 03.
 
 ## Rischi noti
 
